@@ -1,0 +1,32 @@
+[
+  BH("Introduction", [
+    T("The Attendance Monitoring System, referred to throughout this manual as AMS, is a cross-platform application developed for City College of Calamba to digitize and streamline the management of On-the-Job Training attendance. It replaces paper-based logbooks and manual hour tracking with a structured, GPS-enforced, and photo-verified system that operates across Android, iOS, Windows, and Web from a single codebase. Every time-in and time-out record in AMS is tied to a real timestamp, a physical location check, and a required proof photo — making attendance records both auditable and tamper-resistant."),
+    H("Purpose", [
+      T("The primary purpose of AMS is to provide City College of Calamba with a reliable and centralized platform for tracking OJT student attendance. Before AMS, students and supervisors relied on handwritten logbooks and manual hour computations, which were prone to errors, loss, and inconsistency. AMS addresses this by automating hour calculation, enforcing office-defined time windows, requiring GPS proximity checks, and maintaining a full digital record of every attendance entry. The system also supports Work From Home arrangements, early time-in handling, and multi-school-year operations — making it adaptable to the evolving needs of OJT coordination at the college.")
+    ]),
+    H("Target Audience", [
+      T("This manual is intended for all users of the AMS platform across all roles. Students will use this manual to understand how to log their daily attendance, submit proof photos, manage their Activity Report, and monitor their OJT progress. Supervisors will refer to it for managing their office members, reviewing schedules, configuring office settings, and handling school year operations. Admins share the same access as supervisors with added authority over member status management. Super Admins will use this manual for platform-level operations including office management, data backup and restoration, and special key generation. No technical background is required to use AMS — only a working device and an active account."),
+      TBL("User Roles Overview", 5, 2,
+        "Role", "Primary Responsibility",
+        "Student", "Logs daily OJT attendance, submits proof photos, and monitors personal progress",
+        "Supervisor", "Manages student members, reviews records, configures office settings",
+        "Admin", "Same as Supervisor with additional authority to manage member account status",
+        "Super Admin", "Manages all offices platform-wide, handles backups, restores, and special keys"
+      )
+    ]),
+    H("System Overview", [
+      T("AMS is organized around the concept of offices. Each office in the system represents a physical OJT placement site at City College of Calamba and is managed by a supervisor or admin. Students are registered under a specific office and their attendance is tracked against that office's GPS coordinates, time windows, and policies. The system supports multiple school years through an iteration model — when a school year ends, the supervisor or admin advances the system to the next iteration, archiving the previous year's records while preserving them for historical reference. All data is synchronized with a backend server and cached locally on the device, allowing AMS to display previously loaded records even without an active internet connection."),
+      I("AMS Login Page")
+    ]),
+    H("Platform Compatibility", [
+      T("AMS is built using Flutter, which allows it to run on multiple platforms from a single codebase. The application is fully supported on Android mobile devices, iOS mobile devices, Windows desktop computers, and modern web browsers. The interface automatically adapts its layout depending on the orientation and screen size of the device — switching between a bottom navigation bar on portrait mobile views and a side rail navigation panel on landscape or desktop views. All core features including GPS attendance, camera capture, photo proof, Excel export, and file backup are available across platforms, with minor differences in how file saving dialogs appear depending on the operating system."),
+      TBL("Platform Support", 5, 2,
+        "Platform", "Support Status",
+        "Android", "Fully supported — GPS, camera, gallery, file download to external storage",
+        "iOS", "Fully supported — GPS, camera, gallery, standard file handling",
+        "Windows", "Fully supported — webcam via in-app camera preview, file save dialogs",
+        "Web", "Fully supported — browser camera, file downloads via browser"
+      )
+    ])
+  ])
+]

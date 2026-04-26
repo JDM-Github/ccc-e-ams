@@ -1,0 +1,7 @@
+backend2/
+frontend/
+.netlify
+.env
+node_modules/
+seeders/
+seeders1/

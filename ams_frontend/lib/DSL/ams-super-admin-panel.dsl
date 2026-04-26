@@ -1,0 +1,78 @@
+[
+  BH("Super Admin Panel", [
+    T("The Super Admin Panel is a separate interface exclusive to the Super Admin account. It is completely distinct from the main AMS application seen by students, supervisors, and admins. When the Super Admin logs in, they are taken directly to this panel instead of the standard app interface. The panel provides platform-wide management capabilities covering all registered offices, their data, and the special keys used to authorize new Admin registrations. No student schedules, attendance records, or office-level settings are managed from this panel — those remain under the authority of each office's supervisor or admin."),
+    H("Accessing the Panel", [
+      T("The Super Admin Panel is accessed by logging in with the Super Admin credentials on the standard AMS login screen. The login process is identical to any other account — enter the Super Admin username and password in the Sign In tab and tap Sign In. Upon successful authentication, AMS detects the Super Admin role and routes directly to the Super Admin Panel instead of the main app. There is no separate login URL or entry point — the same login screen is used for all account types. The panel displays a dark-themed interface to visually distinguish it from the standard light-themed app used by other roles."),
+      I("AMS Super Admin Panel — Overview")
+    ]),
+    H("Managing Offices", [
+      T("The Offices section is the primary area of the Super Admin Panel. It lists every office registered in the AMS platform and provides tools to search, filter, back up, restore, and toggle the active status of each office. On desktop in landscape orientation, the offices list occupies the left portion of the screen and the special keys panel occupies a fixed sidebar on the right. On mobile, the two sections are separated into tabs — an Offices tab and a Keys tab."),
+      I("AMS Super Admin — Offices Panel"),
+      SH("Searching and Filtering Offices", [
+        T("A search field at the top of the offices panel filters the list in real time by office name or office ID. Below the search field are three filter chips — All, Active, and Deactivated. All shows every registered office regardless of status. Active shows only offices that are currently operational. Deactivated shows only offices that have been deactivated by the Super Admin. A refresh button beside the search field reloads the office list from the server."),
+        TBL("Office Filter Options", 4, 2,
+          "Filter", "Behavior",
+          "All", "Displays all registered offices regardless of their active or deactivated status",
+          "Active", "Displays only offices that are currently operational and accessible to their members",
+          "Deactivated", "Displays only offices that have been deactivated — their members cannot log in"
+        )
+      ]),
+      SH("Office Card Overview", [
+        T("Each office in the list is displayed as a card containing key information about that office and action buttons for managing it. The card header shows the office icon, office name, office ID, and an Active or Deactivated status badge. Below the header is a divider followed by a row of information chips showing the office's configured time windows, WFH start time, time-out cap, weekend policy, and creation date. At the bottom of each card are three action buttons — Backup, Restore, and either Deactivate or Reactivate depending on the office's current status."),
+        TBL("Office Card Information Chips", 6, 2,
+          "Chip", "Information Shown",
+          "Time In window", "The in-office time-in start and end times configured for the office",
+          "WFH start time", "The earliest allowed time-in for Work From Home records",
+          "Time-Out Cap", "The maximum allowed time-out time for the office",
+          "Weekend policy", "Whether the office allows attendance records on weekends",
+          "Creation date", "The date the office was first registered in the system"
+        )
+      ]),
+      SH("Backing Up an Office", [
+        T("To back up an office, tap the Backup button on the office card. A confirmation dialog will appear describing the scope of the backup — it includes all users, schedules, and records associated with that office. Confirm to proceed. AMS requests the full office dataset from the server and compiles it into a JSON file. On Android, the file is saved to external storage automatically. On Windows and Web, a save dialog appears allowing the Super Admin to choose the save location. A loading indicator is shown on the Backup button while the operation is in progress. A success message confirms when the file has been saved. The backup file is named with the office ID and a timestamp for easy identification."),
+        I("AMS Super Admin — Office Backup Confirmation Dialog")
+      ]),
+      SH("Restoring an Office", [
+        T("To restore an office from a backup, tap the Restore button on the office card. A file picker dialog opens immediately, prompting the Super Admin to select a JSON backup file from their device. After a file is selected, AMS validates the backup by checking whether the office ID embedded in the backup file's metadata matches the office ID of the card from which the restore was initiated. If the IDs do not match, the restore is rejected with an error message explaining the mismatch — this prevents accidentally restoring the wrong office's data."),
+        I("AMS Super Admin — Office Restore Confirmation Dialog"),
+        T("If the office IDs match, a detailed confirmation dialog appears showing the backup file name, the date and time the backup was created, and the number of user accounts included in the backup. A strong warning is displayed stating that all current data for the office will be permanently replaced. Confirming the restore uploads the backup to the server, which overwrites all existing data for that office. A success message confirms completion and the office list is refreshed automatically.")
+      ]),
+      SH("Deactivating an Office", [
+        T("To deactivate an office, tap the Deactivate button on the office card. A confirmation dialog will appear explaining that all users in that office will be blocked from logging in until the office is reactivated. Confirming sends the deactivation request to the server. The office card immediately updates to show a Deactivated status badge and the card styling changes to a red-tinted border to make deactivated offices visually distinct in the list. The Deactivate button is replaced by a Reactivate button on the card.")
+      ]),
+      SH("Reactivating an Office", [
+        T("To reactivate a previously deactivated office, tap the Reactivate button on the office card. A confirmation dialog will appear explaining that users in the office will be able to log in again after reactivation. Confirming sends the reactivation request to the server. The office card updates back to the standard active styling with a green Active badge and the Reactivate button is replaced by the Deactivate button.")
+      ])
+    ]),
+    H("Managing Special Keys", [
+      T("The Special Keys section displays all currently active registration keys that have been generated by the Super Admin. These keys are required by anyone attempting to register a new Admin account through the Register tab on the login screen. Without a valid key, the registration will be rejected. The keys panel appears as a fixed sidebar on desktop and as a separate tab on mobile."),
+      I("AMS Super Admin — Special Keys Panel"),
+      SH("Viewing Active Keys", [
+        T("Each key in the list is displayed as a card showing the key value in a monospace green font for easy readability, the email address the key was associated with if one was specified during creation, and the expiry time of the key. A remaining time indicator shows how much time is left before the key expires — displayed as hours and minutes remaining. Keys that are close to expiry within 30 minutes are highlighted with an orange border and orange text on the remaining time indicator to draw attention. A refresh button at the top of the panel reloads the keys list from the server.")
+      ]),
+      SH("Creating a Key", [
+        T("To generate a new special key, tap the Create Key button in the top bar of the Super Admin Panel. This opens the Create Special Key dialog. The dialog allows the Super Admin to configure the key before generating it. An optional email field can be filled in to associate the key with a specific recipient — this is useful for tracking which key was sent to whom but does not restrict usage to that email address. An expiry duration can also be set. Once the form is completed, confirming generates the key and adds it to the active keys list immediately. The key value is displayed on the card and can be copied to the clipboard using the copy button."),
+        I("AMS Create Special Key Dialog")
+      ]),
+      SH("Deleting a Key", [
+        T("To delete an active key before it expires naturally, tap the red trash icon button on the key card. A confirmation dialog will appear asking the Super Admin to confirm the deletion. Once confirmed, the key is immediately invalidated and removed from the list. Any Admin registration attempt using that key after deletion will be rejected. This is useful when a key was generated in error or needs to be revoked before it is used.")
+      ]),
+      SH("Copying a Key", [
+        T("Each key card has a copy icon button beside the key value. Tapping it copies the full key string to the device clipboard. A success snackbar message confirms that the key has been copied. The Super Admin can then paste the key into a message, email, or any other communication channel to send it to the intended Admin registrant.")
+      ])
+    ]),
+    H("Super Admin Account Settings", [
+      T("The Super Admin Panel top bar contains account management buttons for the Super Admin's own account. On desktop in landscape orientation, these appear as labeled buttons with icons. On mobile, they appear as icon-only buttons to conserve space. All account management actions are accessible from the top bar at all times regardless of which section of the panel is being viewed."),
+      I("AMS Super Admin — Top Bar Account Buttons"),
+      SH("Change Profile", [
+        T("Tapping the Profile button opens the Change Profile dialog. This allows the Super Admin to update their display name or other profile details associated with the Super Admin account. Changes are saved to the server and reflected in the panel header immediately after saving.")
+      ]),
+      SH("Change Password", [
+        T("Tapping the Change Password button opens the Change Password dialog. The Super Admin must enter their current password to authorize the change, followed by the new password and a confirmation of the new password. The new password must meet the minimum length requirement. Once saved, the new password takes effect on the next login session.")
+      ]),
+      SH("Logout", [
+        T("Tapping the Logout button opens a confirmation dialog asking the Super Admin to confirm they want to sign out of the panel. Confirming clears the Super Admin session and returns the app to the standard login screen. The Super Admin will need to enter their credentials again to access the panel on the next launch.")
+      ])
+    ])
+  ])
+]
