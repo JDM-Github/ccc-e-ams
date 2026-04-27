@@ -105,6 +105,14 @@ class _Members extends State<MembersPage> {
       }).toList();
     }
 
+    filtered.sort((a, b) {
+      int order(Member m) {
+        if (m.isAdmin == true) return 0;
+        if (m.role == 'supervisor') return 1;
+        return 2;
+      }
+      return order(a).compareTo(order(b));
+    });
     return filtered;
   }
 
@@ -607,6 +615,9 @@ class _Members extends State<MembersPage> {
     final isAdmin = member.isAdmin == true;
     final isStudent = !isSupervisor;
     final pendingDelete = _isPendingDelete(member);
+    final bool isDone = member.isDone ?? false;
+    final double progress = member.progress ?? 0.0;
+    final Color progressColor = _progressColor(progress);
 
     final Color accentColor = pendingDelete
         ? _warning
@@ -614,53 +625,49 @@ class _Members extends State<MembersPage> {
         ? _violet
         : isSupervisor
         ? ThemeManager.brand
-        : ThemeManager.border(context);
-
-    final double progress = member.progress ?? 0.0;
-    final bool isDone = member.isDone ?? false;
-    final Color progressColor = _progressColor(progress);
-    final String progressLabel = member.progressLabel;
-    final String hoursLabel = member.hoursLabel;
-    final int? totalSchedules = member.totalSchedules;
-
-    final String displayName = member.fullName;
-    final String displayId = member.customId ?? 'N/A';
-    final String? displayCourse = member.course;
-    final String? displayProfile = member.profileLink;
-    final String displayInitials = member.initials;
-
-    // Card surface
-    final cardBg = pendingDelete
-        ? (isDark ? _warning.withOpacity(0.06) : Colors.orange[50]!)
-        : ThemeManager.surface(context);
-
-    final cardBorder = pendingDelete
-        ? _warning.withOpacity(isDark ? 0.4 : 0.5)
         : isDone
-        ? _success.withOpacity(0.35)
-        : (isAdmin || isSupervisor)
-        ? accentColor.withOpacity(0.30)
+        ? _success
+        : _teal;
+
+    final String roleLabel = pendingDelete
+        ? 'Pending Delete'
+        : isAdmin
+        ? 'Admin'
+        : isSupervisor
+        ? 'Supervisor'
+        : isDone
+        ? 'Completed'
+        : 'Student';
+
+    final IconData roleIcon = pendingDelete
+        ? Icons.hourglass_top_rounded
+        : isAdmin
+        ? Icons.shield_rounded
+        : isSupervisor
+        ? Icons.manage_accounts_rounded
+        : isDone
+        ? Icons.check_circle_rounded
+        : Icons.school_outlined;
+
+    final cardBorderColor = pendingDelete
+        ? _warning.withOpacity(0.4)
+        : (isAdmin || isSupervisor || isDone)
+        ? accentColor.withOpacity(0.22)
         : ThemeManager.border(context);
 
     return Container(
       decoration: BoxDecoration(
-        color: cardBg,
+        color: ThemeManager.surface(context),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cardBorder, width: (pendingDelete || isDone || isAdmin || isSupervisor) ? 1.5 : 1),
+        border: Border.all(color: cardBorderColor),
         boxShadow: isDark
             ? null
-            : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(isDone ? 0.04 : 0.02),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+            : [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2))],
       ),
+      clipBehavior: Clip.antiAlias,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
@@ -673,285 +680,225 @@ class _Members extends State<MembersPage> {
               ),
             ),
           ),
-          child: Column(
-            children: [
-              // Pending delete banner
-              if (pendingDelete)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: _warning.withOpacity(0.08),
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.hourglass_top_rounded, size: 11, color: _warning),
-                      const SizedBox(width: 5),
-                      Text(
-                        'Pending deletion',
-                        style: GoogleFonts.dmSans(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: _warning,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Left accent stripe
+                Container(width: 4, color: accentColor),
 
-              Padding(
-                padding: EdgeInsets.fromLTRB(12, pendingDelete ? 8 : 12, 12, isStudent ? 8 : 12),
-                child: Row(
-                  children: [
-                    // Avatar
-                    Stack(
-                      clipBehavior: Clip.none,
+                // Card content
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          width: 46,
-                          height: 46,
-                          decoration: BoxDecoration(
-                            color: accentColor.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(23),
-                            border: Border.all(color: accentColor.withOpacity((isAdmin || isSupervisor) ? 0.25 : 0.12)),
-                          ),
-                          child: displayProfile != null
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(23),
-                                  child: Image.network(
-                                    displayProfile,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => _initialsWidget(displayInitials, accentColor),
-                                  ),
-                                )
-                              : _initialsWidget(displayInitials, accentColor),
-                        ),
-                        if (isAdmin) _avatarBadge(_violet, Icons.shield_rounded),
-                        if (isStudent && isDone) _avatarBadge(_success, Icons.check),
-                        if (pendingDelete) _avatarBadge(_warning, Icons.hourglass_top_rounded),
-                      ],
-                    ),
+                        // ── Main row ──────────────────────────────────────
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            // Avatar
+                            _buildMemberAvatar(member, accentColor),
+                            const SizedBox(width: 12),
 
-                    const SizedBox(width: 12),
+                            // Info
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Name + role badge
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          member.fullNameExtended,
+                                          style: GoogleFonts.dmSans(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: ThemeManager.primary(context),
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      _buildRoleBadge(context, roleLabel, roleIcon, accentColor),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 5),
 
-                    // Info
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  displayName,
-                                  style: GoogleFonts.dmSans(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: ThemeManager.primary(context),
+                                  // ID + schedules row
+                                  Row(
+                                    children: [
+                                      Icon(Icons.badge_outlined, size: 11, color: ThemeManager.muted(context)),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        member.customId ?? member.cccId,
+                                        style: GoogleFonts.dmSans(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w500,
+                                          color: ThemeManager.muted(context),
+                                        ),
+                                      ),
+                                      if (isStudent && member.totalSchedules != null) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          width: 3,
+                                          height: 3,
+                                          decoration: BoxDecoration(
+                                            color: ThemeManager.faint(context),
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Icon(
+                                          Icons.calendar_today_outlined,
+                                          size: 11,
+                                          color: ThemeManager.muted(context),
+                                        ),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          '${member.totalSchedules} days',
+                                          style: GoogleFonts.dmSans(fontSize: 11, color: ThemeManager.muted(context)),
+                                        ),
+                                      ],
+                                    ],
                                   ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              if (pendingDelete)
-                                _statusBadge(context, 'Pending Delete', _warning, Icons.hourglass_top_rounded)
-                              else if (isDone && isStudent)
-                                _statusBadge(context, 'Completed', _success, Icons.check_circle_rounded)
-                              else if (isAdmin)
-                                _statusBadge(context, 'Admin', _violet, Icons.shield_rounded)
-                              else if (isSupervisor)
-                                _statusBadge(context, 'Supervisor', ThemeManager.brand, null),
-                            ],
-                          ),
-                          const SizedBox(height: 3),
-                          Row(
-                            children: [
-                              Icon(Icons.badge_outlined, size: 12, color: ThemeManager.muted(context)),
-                              const SizedBox(width: 4),
-                              Text(
-                                displayId,
-                                style: GoogleFonts.dmSans(
-                                  fontSize: 11,
-                                  color: ThemeManager.muted(context),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              if (isStudent && totalSchedules != null) ...[
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                  decoration: BoxDecoration(
-                                    color: ThemeManager.surfaceTint(context),
-                                    borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(color: ThemeManager.border(context)),
-                                  ),
-                                  child: Text(
-                                    '$totalSchedules days',
-                                    style: GoogleFonts.dmSans(
-                                      fontSize: 10,
-                                      color: ThemeManager.secondary(context),
-                                      fontWeight: FontWeight.w500,
+
+                                  // Course (students only)
+                                  if (isStudent && member.course != null) ...[
+                                    const SizedBox(height: 3),
+                                    Row(
+                                      children: [
+                                        Icon(Icons.school_outlined, size: 11, color: ThemeManager.muted(context)),
+                                        const SizedBox(width: 3),
+                                        Expanded(
+                                          child: Text(
+                                            member.course!,
+                                            style: GoogleFonts.dmSans(fontSize: 11, color: ThemeManager.muted(context)),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          if (displayCourse != null && isStudent) ...[
-                            const SizedBox(height: 2),
-                            Row(
-                              children: [
-                                Icon(Icons.school_outlined, size: 12, color: ThemeManager.muted(context)),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    displayCourse,
-                                    style: GoogleFonts.dmSans(fontSize: 11, color: ThemeManager.muted(context)),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
+                                  ],
+                                ],
+                              ),
                             ),
+
+                            const SizedBox(width: 4),
+                            Icon(Icons.chevron_right_rounded, color: ThemeManager.faint(context), size: 18),
                           ],
-                        ],
-                      ),
-                    ),
+                        ),
 
-                    if (!isSupervisor) ...[
-                      const SizedBox(width: 8),
-                      _hoursPill(context, member.targetHours.toString(), isDark),
-                    ],
-                    const SizedBox(width: 4),
-                    Icon(Icons.chevron_right_rounded, color: ThemeManager.faint(context), size: 18),
-                  ],
-                ),
-              ),
-
-              // Progress bar
-              if (isStudent) ...[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
+                        // ── Progress section (students only) ──────────────
+                        if (isStudent) ...[
+                          const SizedBox(height: 10),
+                          Divider(height: 1, color: ThemeManager.dividerColor(context)),
+                          const SizedBox(height: 10),
                           Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               Icon(
                                 isDone ? Icons.check_circle_rounded : Icons.timelapse_rounded,
                                 size: 12,
                                 color: progressColor,
                               ),
-                              const SizedBox(width: 5),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: LinearProgressIndicator(
+                                    value: progress,
+                                    minHeight: 5,
+                                    backgroundColor: ThemeManager.surfaceTint(context),
+                                    valueColor: AlwaysStoppedAnimation<Color>(progressColor),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
                               Text(
-                                isDone ? 'Completed!' : hoursLabel,
+                                member.progressLabel,
                                 style: GoogleFonts.dmSans(
                                   fontSize: 11,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w700,
                                   color: progressColor,
                                 ),
                               ),
+                              const SizedBox(width: 5),
+                              Text(
+                                '· ${member.hoursLabel}',
+                                style: GoogleFonts.dmSans(fontSize: 10, color: ThemeManager.muted(context)),
+                              ),
                             ],
                           ),
-                          Text(
-                            progressLabel,
-                            style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: progressColor),
-                          ),
                         ],
-                      ),
-                      const SizedBox(height: 5),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: LinearProgressIndicator(
-                            value: progress,
-                            minHeight: 5,
-                            backgroundColor: ThemeManager.surfaceTint(context),
-                            valueColor: AlwaysStoppedAnimation<Color>(progressColor),
-                          ),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-
-  Widget _avatarBadge(Color color, IconData icon) {
-    return Positioned(
-      bottom: -2,
-      right: -2,
-      child: Container(
-        width: 18,
-        height: 18,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 1.5),
-        ),
-        child: Icon(icon, size: 10, color: Colors.white),
+  Widget _buildMemberAvatar(Member member, Color accentColor) {
+    final initials = member.initials;
+    final profileLink = member.profileLink;
+    return Container(
+      width: 54,
+      height: 54,
+      decoration: BoxDecoration(
+        color: accentColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: accentColor.withOpacity(0.22), width: 1.5),
       ),
+      child: profileLink != null
+          ? ClipRRect(
+              borderRadius: BorderRadius.circular(22),
+              child: Image.network(
+                profileLink,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Center(
+                  child: Text(
+                    initials,
+                    style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.bold, color: accentColor),
+                  ),
+                ),
+              ),
+            )
+          : Center(
+              child: Text(
+                initials,
+                style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.bold, color: accentColor),
+              ),
+            ),
     );
   }
 
-  Widget _initialsWidget(String initials, Color color) {
-    return Center(
-      child: Text(
-        initials,
-        style: GoogleFonts.dmSans(fontSize: 17, fontWeight: FontWeight.bold, color: color),
-      ),
-    );
-  }
-
-  Widget _statusBadge(BuildContext context, String label, Color color, IconData? icon) {
+  Widget _buildRoleBadge(BuildContext context, String label, IconData icon, Color color) {
+    final isDark = ThemeManager.isDark(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(ThemeManager.isDark(context) ? 0.15 : 0.09),
-        borderRadius: BorderRadius.circular(4),
+        color: color.withOpacity(isDark ? 0.15 : 0.08),
+        borderRadius: BorderRadius.circular(5),
         border: Border.all(color: color.withOpacity(0.25)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (icon != null) ...[Icon(icon, size: 9, color: color), const SizedBox(width: 3)],
+          Icon(icon, size: 9, color: color),
+          const SizedBox(width: 3),
           Text(
             label,
-            style: GoogleFonts.dmSans(fontSize: 9, fontWeight: FontWeight.w700, color: color, letterSpacing: 0.3),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _hoursPill(BuildContext context, String hours, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: ThemeManager.surfaceTint(context),
-        borderRadius: BorderRadius.circular(7),
-        border: Border.all(color: ThemeManager.border(context)),
-      ),
-      child: Column(
-        children: [
-          Icon(Icons.access_time_rounded, size: 15, color: ThemeManager.secondary(context)),
-          const SizedBox(height: 2),
-          Text(
-            '${hours}h',
-            style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: ThemeManager.primary(context)),
+            style: GoogleFonts.dmSans(fontSize: 10, fontWeight: FontWeight.w700, color: color, letterSpacing: 0.2),
           ),
         ],
       ),

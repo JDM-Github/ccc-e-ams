@@ -205,40 +205,38 @@ class SuperAdminRouter {
 
 		// ── Office Members ──────────────────────────────────────────────────────
 		/**
-		 * GET /superadmin/office-members/:office_id
+		 * GET /superadmin/office-members/:office_id?ay=2025
 		 *
 		 * Returns all users of an office split into three groups:
-		 *   supervisors — role "supervisor" (with their SupervisorUser record)
-		 *   admins      — role "student" AND isAdmin true
-		 *   members     — role "student" AND isAdmin false
-		 * 
+		 *   supervisors — role "supervisor" (current_sy <= ay, or all if no ay)
+		 *   admins      — role "student" AND isAdmin true (always all, no AY filter)
+		 *   members     — role "student" AND isAdmin false (exact current_sy === ay, or all if no ay)
+		 *
 		 * Deleted users (status "deleted") are excluded.
 		 */
 		this.router.get("/office-members/:office_id", async (req, res) => {
 			try {
 				const { office_id } = req.params;
-
+				const ay = req.query.ay ? parseInt(req.query.ay, 10) : null;
 				const office = await Office.findOne({ where: { office_id } });
 				if (!office) {
 					return res.status(404).json({ success: false, message: "Office not found." });
 				}
 
+				const baseWhere = {
+					office_id,
+				};
 				const users = await User.findAll({
-					where: {
-						office_id,
-					},
+					where: baseWhere,
 					raw: true,
 				});
 
 				const cccIds = users.map((u) => u.ccc_id);
-
 				const supervisorRecords = cccIds.length > 0
 					? await SupervisorUser.findAll({ where: { ccc_id: cccIds }, raw: true })
 					: [];
 				const supervisorMap = {};
 				supervisorRecords.forEach((s) => (supervisorMap[s.ccc_id] = s));
-
-				// Strip password before sending
 				const sanitize = (u) => {
 					const { password, ...safe } = u;
 					return safe;
@@ -250,16 +248,20 @@ class SuperAdminRouter {
 
 				for (const user of users) {
 					const safe = sanitize(user);
+
 					if (user.isAdmin) {
 						admins.push(safe);
-					}
-					else if (user.role === "supervisor") {
-						supervisors.push({
-							...safe,
-							supervisor_record: supervisorMap[user.ccc_id] || null,
-						});
+					} else if (user.role === "supervisor") {
+						if (!ay || user.current_sy <= ay) {
+							supervisors.push({
+								...safe,
+								supervisor_record: supervisorMap[user.ccc_id] || null,
+							});
+						}
 					} else {
-						members.push(safe);
+						if (!ay || user.current_sy === ay) {
+							members.push(safe);
+						}
 					}
 				}
 
@@ -267,11 +269,12 @@ class SuperAdminRouter {
 					success: true,
 					office_id,
 					office_name: office.office_name,
+					ay: ay ?? null,
 					counts: {
 						supervisors: supervisors.length,
 						admins: admins.length,
 						members: members.length,
-						total: users.length,
+						total: supervisors.length + admins.length + members.length,
 					},
 					supervisors,
 					admins,
@@ -280,6 +283,60 @@ class SuperAdminRouter {
 			} catch (err) {
 				console.error("[SuperAdminRouter] GET /office-members/:office_id →", err);
 				return res.status(500).json({ success: false, message: "Failed to fetch office members." });
+			}
+		});
+
+		// ── Available AYs ───────────────────────────────────────────────────────
+		/**
+		 * GET /superadmin/office-members/:office_id/available-ay
+		 *
+		 * Returns all distinct academic years (current_sy) found among
+		 * non-deleted users of the office, sorted ascending.
+		 *
+		 * Example response:
+		 * {
+		 *   success: true,
+		 *   office_id: "OFF-001",
+		 *   available_ay: [
+		 *     { ay: 2025, label: "2025-2026" },
+		 *     { ay: 2026, label: "2026-2027" },
+		 *   ]
+		 * }
+		 */
+		this.router.get("/office-members/:office_id/available-ay", async (req, res) => {
+			try {
+				const { office_id } = req.params;
+
+				const office = await Office.findOne({ where: { office_id } });
+				if (!office) {
+					return res.status(404).json({ success: false, message: "Office not found." });
+				}
+
+				const rows = await User.findAll({
+					attributes: [
+						[sequelize.fn("DISTINCT", sequelize.col("current_sy")), "current_sy"]
+					],
+					where: {
+						office_id,
+						status: { [Op.ne]: "deleted" },
+					},
+					order: [["current_sy", "ASC"]],
+					raw: true,
+				});
+				const available_ay = rows.map((r) => ({
+					ay: r.current_sy,
+					label: `${r.current_sy}-${r.current_sy + 1}`,
+				}));
+
+				return res.json({
+					success: true,
+					office_id,
+					office_name: office.office_name,
+					available_ay,
+				});
+			} catch (err) {
+				console.error("[SuperAdminRouter] GET /office-members/:office_id/available-ay →", err);
+				return res.status(500).json({ success: false, message: "Failed to fetch available academic years." });
 			}
 		});
 
@@ -647,6 +704,8 @@ class SuperAdminRouter {
 					"first_name",
 					"middle_name",
 					"last_name",
+					"suffix_name",
+					"extension_name",
 					"email",
 					"course",
 					"target_hours",
@@ -681,7 +740,10 @@ class SuperAdminRouter {
 
 				const before = {
 					first_name: user.first_name,
+					middle_name: user.middle_name,
 					last_name: user.last_name,
+					suffix_name: user.suffix_name,
+					extension_name: user.extension_name,
 					email: user.email,
 					role: user.role,
 					isAdmin: user.isAdmin,
@@ -690,10 +752,9 @@ class SuperAdminRouter {
 					target_hours: user.target_hours,
 				};
 
-				await user.update(updates);
+				await User.update(updates, { where: { ccc_id } });
 				await user.reload();
 
-				// Build a readable diff for the log
 				const changed = Object.keys(updates)
 					.filter((k) => before[k] !== undefined && String(before[k]) !== String(updates[k]))
 					.map((k) => `${k}: "${before[k]}" → "${updates[k]}"`)
@@ -757,6 +818,67 @@ class SuperAdminRouter {
 				return res.status(500).json({ success: false, message: "Failed to restore member." });
 			}
 		});
+
+
+		// ── Permanent Delete Member ─────────────────────────────────────────────────
+		/**
+		 * POST /super-admin/permanent-delete-member
+		 *
+		 * Body: { ccc_id }
+		 *
+		 * Permanently deletes a user and all associated records:
+		 * - SupervisorUser record (if any)
+		 * - Logs
+		 * - Schedules, and their related ActivityRecords + Summaries
+		 * - The User itself
+		 *
+		 * This operation is irreversible.
+		 */
+		this.router.post("/permanent-delete-member", async (req, res) => {
+			const { ccc_id } = req.body;
+			if (!ccc_id) {
+				return res.status(400).json({ success: false, message: "ccc_id is required." });
+			}
+
+			const transaction = await sequelize.transaction();
+			try {
+				const user = await User.findOne({ where: { ccc_id }, transaction });
+				if (!user) {
+					await transaction.rollback();
+					return res.status(404).json({ success: false, message: "User not found." });
+				}
+
+				const name = `${user.first_name} ${user.last_name}`;
+
+				await SupervisorUser.destroy({ where: { ccc_id }, transaction });
+				await Log.destroy({ where: { user_ccc_id: ccc_id }, transaction });
+
+				const schedules = await Schedule.findAll({ where: { ccc_id }, transaction });
+				const scheduleRecordDates = schedules.map(s => buildRecordDate(s.date, s.ccc_id));
+				if (scheduleRecordDates.length > 0) {
+					await ActivityRecord.destroy({ where: { schedule_record_date: scheduleRecordDates }, transaction });
+					await Summary.destroy({ where: { schedule_record_date: scheduleRecordDates }, transaction });
+				}
+				await Schedule.destroy({ where: { ccc_id }, transaction });
+
+				await user.destroy({ transaction });
+				await transaction.commit();
+
+				await createSuperAdminLog(
+					"delete",
+					`Permanently deleted member ${ccc_id} (${name}).`
+				);
+
+				return res.json({
+					success: true,
+					message: `${name} has been permanently deleted.`
+				});
+			} catch (err) {
+				await transaction.rollback();
+				console.error("[SuperAdminRouter] POST /permanent-delete-member →", err);
+				return res.status(500).json({ success: false, message: "Failed to permanently delete member." });
+			}
+		});
 	}
 
 	deleteRouter() {
@@ -774,6 +896,8 @@ class SuperAdminRouter {
 				return res.status(500).json({ success: false, message: "Failed to delete special key." });
 			}
 		});
+
+		
 	}
 }
 

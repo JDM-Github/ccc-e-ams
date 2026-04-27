@@ -14,7 +14,11 @@ import 'app_bar_widgets.dart';
 class AppTopBar extends StatelessWidget {
   final String pageLabel;
   final String firstName;
+  final String middleName;
   final String lastName;
+  final String suffixName;
+  final String extensionName;
+
   final String role;
   final String course;
   final String officeName;
@@ -42,7 +46,11 @@ class AppTopBar extends StatelessWidget {
     super.key,
     required this.pageLabel,
     required this.firstName,
+    required this.middleName,
     required this.lastName,
+    required this.suffixName,
+    required this.extensionName,
+
     required this.role,
     required this.course,
     required this.officeName,
@@ -148,7 +156,7 @@ class AppTopBar extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                '$firstName $lastName',
+                _formatFullName(firstName, middleName, lastName, suffixName, extensionName),
                 style: GoogleFonts.dmSans(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -166,6 +174,37 @@ class AppTopBar extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _formatFullName(
+    String firstName,
+    String middleName,
+    String lastName,
+    String suffixName, [
+    String? extensionName,
+  ]) {
+    String base;
+    if (middleName.trim().isNotEmpty) {
+      final middleInitials = middleName
+          .trim()
+          .split(RegExp(r'\s+'))
+          .map((word) => word.isNotEmpty ? word[0].toUpperCase() : '')
+          .join('.');
+      base = '$firstName $middleInitials. $lastName';
+    } else {
+      base = '$firstName $lastName';
+    }
+
+    final suffix = suffixName.trim();
+    if (suffix.isNotEmpty) {
+      base = '$base, $suffix';
+    }
+
+    final ext = extensionName?.trim();
+    if (ext != null && ext.isNotEmpty) {
+      base = '$base, $ext';
+    }
+    return base;
   }
 }
 

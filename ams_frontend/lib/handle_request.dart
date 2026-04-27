@@ -4,7 +4,7 @@ import 'dart:convert';
 class RequestHandler {
   static bool useLiveUrl = true;
   String get baseUrl {
-    return RequestHandler.useLiveUrl ? 'https://ccc-e-ams.netlify.app' : 'https://dce78043--ojt-ams.netlify.live';
+    return RequestHandler.useLiveUrl ? 'https://ccc-e-ams.netlify.app' : 'https://dce78043--ccc-e-ams.netlify.live';
   }
 
   Future<Map<String, dynamic>> handleRequest(

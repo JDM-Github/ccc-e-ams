@@ -1,7 +1,7 @@
 [build]
   node_bundler = "esbuild"
   functions = "backend/functions"
-  publish = "frontend/build"
+  publish = "frontend"
   included_files = [
     "backend/models/**",
     "backend/middlewares/**",

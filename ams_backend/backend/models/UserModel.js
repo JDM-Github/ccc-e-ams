@@ -20,6 +20,14 @@ const User = sequelize.define(
             type: DataTypes.STRING,
             allowNull: false,
         },
+        suffix_name: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        extension_name: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
         ccc_id: {
             type: DataTypes.STRING,
             allowNull: false,

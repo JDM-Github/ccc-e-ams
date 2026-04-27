@@ -19,10 +19,14 @@ class _EditMemberDialogState extends State<EditMemberDialog> {
   late TextEditingController _firstName;
   late TextEditingController _middleName;
   late TextEditingController _lastName;
+  late TextEditingController _extensionName;
   late TextEditingController _email;
   late TextEditingController _profileLink;
   late TextEditingController _targetHours;
   late TextEditingController _customId;
+  String? _selectedSuffix;
+  static const List<String> _suffixes = ['Jr.', 'Sr.', 'II', 'III', 'IV', 'V'];
+
   String? _selectedCourse;
   final LoginStore _loginStore = LoginStore();
   final _formKey = GlobalKey<FormState>();
@@ -98,6 +102,7 @@ class _EditMemberDialogState extends State<EditMemberDialog> {
     _firstName = TextEditingController(text: m.firstName);
     _middleName = TextEditingController(text: m.middleName ?? '');
     _lastName = TextEditingController(text: m.lastName);
+    _extensionName = TextEditingController(text: m.extensionName ?? '');
     _email = TextEditingController(text: m.email);
     _profileLink = TextEditingController(text: m.profileLink ?? '');
     _targetHours = TextEditingController(text: m.targetHours?.toString() ?? '');
@@ -156,6 +161,8 @@ class _EditMemberDialogState extends State<EditMemberDialog> {
         firstName: _firstName.text.trim(),
         middleName: _middleName.text.trim().isEmpty ? null : _middleName.text.trim(),
         lastName: _lastName.text.trim(),
+        suffixName: _selectedSuffix?.trim(),
+        extensionName: _extensionName.text.trim().isEmpty ? null : _extensionName.text.trim(),
         cccId: widget.member.cccId,
         customId: _customId.text.trim().isEmpty ? null : _customId.text.trim(),
         email: _email.text.trim(),
@@ -170,12 +177,55 @@ class _EditMemberDialogState extends State<EditMemberDialog> {
     );
   }
 
+  Widget _suffixDropdown() {
+    return DropdownButtonFormField<String>(
+      initialValue: _selectedSuffix,
+      isExpanded: true,
+      dropdownColor: ThemeManager.surfaceElevated(context),
+      style: GoogleFonts.dmSans(fontSize: 13, color: ThemeManager.primary(context)),
+      icon: Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: ThemeManager.muted(context)),
+      decoration: InputDecoration(
+        labelText: 'Suffix (Optional)',
+        labelStyle: GoogleFonts.dmSans(fontSize: 13, color: ThemeManager.inputLabelColor(context)),
+        prefixIcon: Icon(Icons.text_fields_rounded, size: 16, color: ThemeManager.inputIconColor(context)),
+        filled: true,
+        fillColor: ThemeManager.inputFillColor(context),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: ThemeManager.inputBorderColor(context)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: ThemeManager.inputBorderColor(context)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: ThemeManager.inputFocusedColor(context), width: 1.5),
+        ),
+      ),
+      onChanged: (val) => setState(() => _selectedSuffix = val),
+      items: [
+        DropdownMenuItem<String>(
+          value: null,
+          child: Text('None', style: GoogleFonts.dmSans(fontSize: 13, color: ThemeManager.muted(context))),
+        ),
+        ..._suffixes.map(
+          (s) => DropdownMenuItem(
+            value: s,
+            child: Text(s, style: GoogleFonts.dmSans(fontSize: 13)),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = ThemeManager.isDark(context);
     return Center(
       child: Container(
-        width: 480,
+        width: 540,
         margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
         decoration: BoxDecoration(
           color: ThemeManager.surfaceElevated(context),
@@ -244,6 +294,7 @@ class _EditMemberDialogState extends State<EditMemberDialog> {
                       Row(
                         children: [
                           Expanded(
+                            flex: 1,
                             child: _field(
                               _firstName,
                               'First name',
@@ -252,8 +303,25 @@ class _EditMemberDialogState extends State<EditMemberDialog> {
                               validator: (v) => _validateName(v?.trim() ?? ''),
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 10),
                           Expanded(
+                            flex: 1,
+                            child: _field(
+                              _middleName,
+                              'Middle name (optional)',
+                              Icons.person_outline_rounded,
+                              isDark,
+                              validator: (v) {
+                                final val = v?.trim() ?? '';
+                                if (val.isEmpty) return null;
+                                if (!RegExp(r"^[a-zA-ZñÑ\s\-']+$").hasMatch(val)) return 'Letters only';
+                                return null;
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            flex: 1,
                             child: _field(
                               _lastName,
                               'Last name',
@@ -265,17 +333,26 @@ class _EditMemberDialogState extends State<EditMemberDialog> {
                         ],
                       ),
                       const SizedBox(height: 10),
-                      _field(
-                        _middleName,
-                        'Middle name (optional)',
-                        Icons.person_outline_rounded,
-                        isDark,
-                        validator: (v) {
-                          final val = v?.trim() ?? '';
-                          if (val.isEmpty) return null;
-                          if (!RegExp(r"^[a-zA-ZñÑ\s\-']+$").hasMatch(val)) return 'Letters only';
-                          return null;
-                        },
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 1,
+                            child: _field(
+                              _extensionName,
+                              'Extension (opt)',
+                              Icons.sort_by_alpha_rounded,
+                              isDark,
+                              validator: (v) {
+                                final val = v?.trim() ?? '';
+                                if (val.isEmpty) return null;
+                                if (!RegExp(r"^[a-zA-Z0-9\s\.]+$").hasMatch(val)) return 'Letters, numbers, dot, space';
+                                return null;
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(flex: 1, child: _suffixDropdown()),
+                        ],
                       ),
                       const SizedBox(height: 20),
                       _sectionLabel('Account information', Icons.badge_outlined, isDark),

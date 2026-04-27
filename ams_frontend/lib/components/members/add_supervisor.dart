@@ -22,11 +22,14 @@ class _AddSupervisorSheetState extends State<AddSupervisorSheet> {
   final _firstNameController = TextEditingController();
   final _middleNameController = TextEditingController();
   final _lastNameController = TextEditingController();
+  final _extensionController = TextEditingController();
   final _cccIdController = TextEditingController();
   final _customIdController = TextEditingController();
   final _emailController = TextEditingController();
   final _officeIdController = TextEditingController();
   final _passwordController = TextEditingController();
+  String? _selectedSuffix;
+  static const List<String> _suffixes = ['Jr.', 'Sr.', 'II', 'III', 'IV', 'V'];
 
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -38,6 +41,7 @@ class _AddSupervisorSheetState extends State<AddSupervisorSheet> {
     _firstNameController.dispose();
     _middleNameController.dispose();
     _lastNameController.dispose();
+    _extensionController.dispose();
     _cccIdController.dispose();
     _customIdController.dispose();
     _emailController.dispose();
@@ -75,6 +79,8 @@ class _AddSupervisorSheetState extends State<AddSupervisorSheet> {
           'first_name': _firstNameController.text.trim(),
           'middle_name': _middleNameController.text.trim(),
           'last_name': _lastNameController.text.trim(),
+          'suffix_name': _selectedSuffix?.trim(),
+          'extension_name': _extensionController.text.trim().isEmpty ? null : _extensionController.text.trim(),
           'ccc_id': _cccIdController.text.trim(),
           'custom_id': _customIdController.text.trim(),
           'email': _emailController.text.trim(),
@@ -250,6 +256,49 @@ class _AddSupervisorSheetState extends State<AddSupervisorSheet> {
     );
   }
 
+  Widget _suffixDropdown() {
+    return DropdownButtonFormField<String>(
+      initialValue: _selectedSuffix,
+      isExpanded: true,
+      dropdownColor: ThemeManager.surfaceElevated(context),
+      style: GoogleFonts.dmSans(fontSize: 13, color: ThemeManager.primary(context)),
+      icon: Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: ThemeManager.muted(context)),
+      decoration: InputDecoration(
+        labelText: 'Suffix (Optional)',
+        labelStyle: GoogleFonts.dmSans(fontSize: 13, color: ThemeManager.inputLabelColor(context)),
+        prefixIcon: Icon(Icons.text_fields_rounded, size: 16, color: ThemeManager.inputIconColor(context)),
+        filled: true,
+        fillColor: ThemeManager.inputFillColor(context),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: ThemeManager.inputBorderColor(context)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: ThemeManager.inputBorderColor(context)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: ThemeManager.inputFocusedColor(context), width: 1.5),
+        ),
+      ),
+      onChanged: (val) => setState(() => _selectedSuffix = val),
+      items: [
+        DropdownMenuItem<String>(
+          value: null,
+          child: Text('None', style: GoogleFonts.dmSans(fontSize: 13, color: ThemeManager.muted(context))),
+        ),
+        ..._suffixes.map(
+          (s) => DropdownMenuItem(
+            value: s,
+            child: Text(s, style: GoogleFonts.dmSans(fontSize: 13)),
+          ),
+        ),
+      ],
+    );
+  }
+
   // ── Form body ──────────────────────────────────────────────────────────────
 
   Widget _formBody() {
@@ -275,23 +324,44 @@ class _AddSupervisorSheetState extends State<AddSupervisorSheet> {
               const SizedBox(width: 12),
               Expanded(
                 child: _field(
+                  controller: _middleNameController,
+                  label: 'Middle Name (Optional)',
+                  icon: Icons.person_outline_rounded,
+                  validator: (v) {
+                    final val = v?.trim() ?? '';
+                    if (val.isEmpty) return null;
+                    if (!RegExp(r"^[a-zA-ZñÑ\s\-']+$").hasMatch(val)) return 'Letters only';
+                    return null;
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _field(
                   controller: _lastNameController,
                   label: 'Last Name',
                   icon: Icons.person_outline_rounded,
                   validator: _nameValidator,
                 ),
               ),
+              const SizedBox(width: 12),
+              Expanded(child: _suffixDropdown()),
             ],
           ),
           const SizedBox(height: 12),
           _field(
-            controller: _middleNameController,
-            label: 'Middle Name (Optional)',
-            icon: Icons.person_outline_rounded,
+            controller: _extensionController,
+            label: 'Extension (e.g., PhD, MD)',
+            icon: Icons.emoji_objects_outlined,
+            hint: 'Optional',
             validator: (v) {
               final val = v?.trim() ?? '';
               if (val.isEmpty) return null;
-              if (!RegExp(r"^[a-zA-ZñÑ\s\-']+$").hasMatch(val)) return 'Letters only';
+              if (!RegExp(r"^[a-zA-Z0-9\s\.]+$").hasMatch(val)) return 'Letters, numbers, dot, space only';
               return null;
             },
           ),

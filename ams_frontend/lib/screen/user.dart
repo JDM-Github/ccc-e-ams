@@ -128,6 +128,7 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
       firstName: user['first_name'],
       middleName: user['middle_name'],
       lastName: user['last_name'],
+      extensionName: user['extension_name'],
       cccId: user['ccc_id'],
       email: user['email'],
       role: user['role'],
@@ -249,7 +250,36 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
     );
   }
 
-  // ── Build ─────────────────────────────────────────────────────────────────
+  String _formatFullName(
+    String firstName,
+    String middleName,
+    String lastName,
+    String suffixName, [
+    String? extensionName,
+  ]) {
+    String base;
+    if (middleName.trim().isNotEmpty) {
+      final middleInitials = middleName
+          .trim()
+          .split(RegExp(r'\s+'))
+          .map((word) => word.isNotEmpty ? word[0].toUpperCase() : '')
+          .join('.');
+      base = '$firstName $middleInitials. $lastName';
+    } else {
+      base = '$firstName $lastName';
+    }
+
+    final suffix = suffixName.trim();
+    if (suffix.isNotEmpty) {
+      base = '$base, $suffix';
+    }
+
+    final ext = extensionName?.trim();
+    if (ext != null && ext.isNotEmpty) {
+      base = '$base, $ext';
+    }
+    return base;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -270,6 +300,8 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
         final firstName = user['first_name'] as String;
         final middleName = (user['middle_name'] as String?) ?? '';
         final lastName = user['last_name'] as String;
+        final suffixName = user['suffix_name'] as String? ?? '';
+        final extensionName = (user['extension_name'] as String?) ?? '';
         final cccId = user['ccc_id'] as String;
         final customId = user['custom_id']?.toString() ?? '';
         final email = user['email'] as String;
@@ -277,7 +309,7 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
         final course = user['course'] as String? ?? '';
         final targetHours = user['target_hours'] as int? ?? 0;
         final isAdmin = user['isAdmin'] as bool? ?? false;
-        final fullName = middleName.isNotEmpty ? '$firstName $middleName $lastName' : '$firstName $lastName';
+        final fullName = _formatFullName(firstName, middleName, lastName, suffixName, extensionName);
         final initial = _initials(firstName, lastName);
         final isLandscape = MediaQuery.of(context).size.width > MediaQuery.of(context).size.height;
 
@@ -771,7 +803,7 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
   Widget _statsCard(bool isDark) {
     return card(
       context,
-     iconColor: isDark ? const Color(0xFF60A5FA) : const Color(0xFF1B3769),
+      iconColor: isDark ? const Color(0xFF60A5FA) : const Color(0xFF1B3769),
       icon: Icons.bar_chart_rounded,
       title: 'Statistics',
       child: Column(

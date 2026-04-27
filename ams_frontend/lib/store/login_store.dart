@@ -57,9 +57,10 @@ class LoginStore {
       user.value['first_name'] = updatedMember.firstName;
       user.value['middle_name'] = updatedMember.middleName;
       user.value['last_name'] = updatedMember.lastName;
+      user.value['suffix_name'] = updatedMember.suffixName;
+      user.value['extension_name'] = updatedMember.extensionName;
       user.value['email'] = updatedMember.email;
       user.value['course'] = updatedMember.course;
-      await saveUser(user.value, rememberMe.value);
 
       final requestHandler = RequestHandler();
       final body = updatedMember.toJson();
@@ -70,6 +71,8 @@ class LoginStore {
       );
       if (response['success'] != true) {
         debugPrint('Failed to sync member update: ${response['message']}');
+      } else {
+        await saveUser(user.value, rememberMe.value);
       }
     } catch (e) {
       debugPrint('Error editing member: $e');
@@ -104,6 +107,8 @@ class LoginStore {
           'first_name': user['first_name'],
           'middle_name': user['middle_name'],
           'last_name': user['last_name'],
+          'suffix_name': user['suffix_name'],
+          'extension_name': user['extension_name'],
           'role': user['role'],
           'isAdmin': user['isAdmin'] ?? false,
           'profile_link': user['profile_link'],
@@ -127,7 +132,7 @@ class LoginStore {
           'allow_weekend': user['allow_weekend'],
           'loginTime': DateTime.now().toIso8601String(),
         };
-
+        print('User logged in: $userData');
         await saveUser(userData, rememberMe);
         isLoading.value = false;
         return response;

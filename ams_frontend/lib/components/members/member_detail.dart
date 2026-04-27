@@ -119,10 +119,10 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
     };
     final bodyText = switch (newStatus) {
       'pending_for_delete' =>
-        'This will flag "${_localMember.fullName}" for deletion. An admin will need to confirm before the account is fully removed.',
+        'This will flag "${_localMember.fullNameExtended}" for deletion. An admin will need to confirm before the account is fully removed.',
       'deleted' =>
-        'This will permanently delete "${_localMember.fullName}". Their records will be hidden from the app. This action cannot be undone easily.',
-      'active' => 'This will restore "${_localMember.fullName}" to active status.',
+        'This will permanently delete "${_localMember.fullNameExtended}". Their records will be hidden from the app. This action cannot be undone easily.',
+      'active' => 'This will restore "${_localMember.fullNameExtended}" to active status.',
       _ => 'Are you sure?',
     };
     final confirmColor = switch (newStatus) {
@@ -337,6 +337,32 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
     );
   }
 
+  Widget _buildAvatar(Member member, double size, {Color? borderColor}) {
+    final hasImage = member.profileLink != null && member.profileLink!.isNotEmpty;
+    final bool isSupervisorOrAdmin = member.role == 'supervisor' || member.isAdmin == true;
+    final Color effectiveBorder =
+        borderColor ?? (isSupervisorOrAdmin ? (member.isAdmin == true ? _violet : _success) : ThemeManager.brand);
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: effectiveBorder.withOpacity(0.4), width: 2),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 4, offset: const Offset(0, 2))],
+      ),
+      child: ClipOval(
+        child: hasImage
+            ? Image.network(
+                member.profileLink!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _initialsCenter(member.initials, size * 0.35),
+              )
+            : _initialsCenter(member.initials, size * 0.35),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = ThemeManager.isDark(context);
@@ -383,7 +409,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
         },
       ),
       title: Text(
-        _localMember.fullName,
+        _localMember.fullNameExtended,
         style: GoogleFonts.dmSans(color: ThemeManager.primary(context), fontSize: 17, fontWeight: FontWeight.w600),
       ),
       actions: [
@@ -608,7 +634,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                _localMember.fullName,
+                _localMember.fullNameExtended,
                 textAlign: TextAlign.center,
                 style: GoogleFonts.dmSans(
                   fontSize: 15,
@@ -729,19 +755,10 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         const SizedBox(height: 20),
-        Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(
-            color: color.withOpacity(isDark ? 0.15 : 0.08),
-            borderRadius: BorderRadius.circular(36),
-            border: Border.all(color: color.withOpacity(0.25)),
-          ),
-          child: Icon(isAdmin ? Icons.shield_rounded : Icons.supervisor_account_rounded, size: 36, color: color),
-        ),
+        _buildAvatar(_localMember, 72, borderColor: color),
         const SizedBox(height: 12),
         Text(
-          _localMember.fullName,
+          _localMember.fullNameExtended,
           textAlign: TextAlign.center,
           style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: ThemeManager.primary(context)),
         ),
@@ -1025,7 +1042,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _localMember.fullName,
+                      _localMember.fullNameExtended,
                       style: GoogleFonts.dmSans(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
@@ -1645,11 +1662,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: color.withOpacity(isDark ? 0.15 : 0.08), shape: BoxShape.circle),
-                child: Icon(isAdmin ? Icons.shield_rounded : Icons.supervisor_account_rounded, size: 44, color: color),
-              ),
+              _buildAvatar(_localMember, 72, borderColor: color),
               const SizedBox(height: 16),
               Text(
                 title,

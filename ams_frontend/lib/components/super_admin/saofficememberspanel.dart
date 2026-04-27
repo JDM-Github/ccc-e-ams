@@ -41,19 +41,34 @@ class SAOfficeMembersPanel extends StatefulWidget {
 
 class _SAOfficeMembersPanelState extends State<SAOfficeMembersPanel> with SingleTickerProviderStateMixin {
   late TabController _tabs;
-  bool _loading = true;
+
+  // ── loading states ─────────────────────────────────────────────────────────
+  bool _loadingAY = true; // fetching available AYs
+  bool _loadingMembers = true; // fetching members
   String? _error;
   String _search = '';
 
+  // ── AY filter ──────────────────────────────────────────────────────────────
+  /// Raw list from /available-ay: [{ ay: 2025, label: "2025-2026" }, ...]
+  List<Map<String, dynamic>> _availableAY = [];
+
+  /// Currently selected ay value (int). null → "All AY" (no filter)
+  int? _selectedAY;
+
+  // ── member data ────────────────────────────────────────────────────────────
   List<Map<String, dynamic>> _supervisors = [];
   List<Map<String, dynamic>> _admins = [];
   List<Map<String, dynamic>> _members = [];
+
+  // ── combined loading guard ─────────────────────────────────────────────────
+  bool get _loading => _loadingAY || _loadingMembers;
 
   @override
   void initState() {
     super.initState();
     _tabs = TabController(length: 3, vsync: this);
-    _load();
+    _loadAY(); // fetch AYs first
+    _loadMembers(); // members can load in parallel
   }
 
   @override
@@ -62,15 +77,39 @@ class _SAOfficeMembersPanelState extends State<SAOfficeMembersPanel> with Single
     super.dispose();
   }
 
-  Future<void> _load() async {
+  // ── data fetchers ──────────────────────────────────────────────────────────
+
+  Future<void> _loadAY() async {
+    if (!mounted) return;
+    setState(() => _loadingAY = true);
+    try {
+      final officeId = widget.office['office_id'];
+      final r = await RequestHandler().handleRequest(
+        'super-admin/office-members/$officeId/available-ay',
+        method: 'GET',
+      );
+      if (mounted) {
+        setState(() {
+          _availableAY = List<Map<String, dynamic>>.from(r['available_ay'] ?? []);
+        });
+      }
+    } catch (_) {
+      // Non-fatal — AY filter just won't populate
+    } finally {
+      if (mounted) setState(() => _loadingAY = false);
+    }
+  }
+
+  Future<void> _loadMembers() async {
     if (!mounted) return;
     setState(() {
-      _loading = true;
+      _loadingMembers = true;
       _error = null;
     });
     try {
       final officeId = widget.office['office_id'];
-      final r = await RequestHandler().handleRequest('super-admin/office-members/$officeId', method: 'GET');
+      final query = _selectedAY != null ? '?ay=$_selectedAY' : '';
+      final r = await RequestHandler().handleRequest('super-admin/office-members/$officeId$query', method: 'GET');
       if (mounted) {
         setState(() {
           _supervisors = List<Map<String, dynamic>>.from(r['supervisors'] ?? []);
@@ -81,11 +120,35 @@ class _SAOfficeMembersPanelState extends State<SAOfficeMembersPanel> with Single
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() => _loadingMembers = false);
     }
   }
 
+  /// Reload everything (called by refresh button)
+  Future<void> _reload() async {
+    await Future.wait([_loadAY(), _loadMembers()]);
+  }
+
   // ── helpers ────────────────────────────────────────────────────────────────
+
+  String _fullNameExtended(Map<String, dynamic> u) {
+    final firstName = (u['first_name'] as String? ?? '').trim();
+    final lastName = (u['last_name'] as String? ?? '').trim();
+    final middleName = (u['middle_name'] as String? ?? '').trim();
+    final suffix = (u['suffix_name'] as String? ?? '').trim();
+    final extension = (u['extension_name'] as String? ?? '').trim();
+
+    String base;
+    if (middleName.isNotEmpty) {
+      final initials = middleName.split(RegExp(r'\s+')).map((w) => w.isNotEmpty ? w[0].toUpperCase() : '').join('.');
+      base = '$firstName $initials. $lastName';
+    } else {
+      base = '$firstName $lastName';
+    }
+    if (suffix.isNotEmpty) base = '$base, $suffix';
+    if (extension.isNotEmpty) base = '$base, $extension';
+    return base;
+  }
 
   String _initials(Map<String, dynamic> u) {
     final f = (u['first_name'] as String? ?? '').isNotEmpty ? (u['first_name'] as String)[0] : '';
@@ -93,19 +156,17 @@ class _SAOfficeMembersPanelState extends State<SAOfficeMembersPanel> with Single
     return '$f$l'.toUpperCase();
   }
 
-  String _fullName(Map<String, dynamic> u) => '${u['first_name'] ?? ''} ${u['last_name'] ?? ''}'.trim();
-
   List<Map<String, dynamic>> _filtered(List<Map<String, dynamic>> list) {
     if (_search.isEmpty) return list;
     final q = _search.toLowerCase();
-    return list
-        .where(
-          (u) => _fullName(u).toLowerCase().contains(q) || (u['ccc_id'] as String? ?? '').toLowerCase().contains(q),
-        )
-        .toList();
+    return list.where((u) {
+      final name = _fullNameExtended(u).toLowerCase();
+      final id = (u['ccc_id'] as String? ?? '').toLowerCase();
+      return name.contains(q) || id.contains(q);
+    }).toList();
   }
 
-  // ── small components ───────────────────────────────────────────────────────
+  // ── small widgets ──────────────────────────────────────────────────────────
 
   Widget _statusBadge(String? status) {
     switch (status) {
@@ -133,19 +194,29 @@ class _SAOfficeMembersPanelState extends State<SAOfficeMembersPanel> with Single
     ),
   );
 
-  Widget _avatar(Map<String, dynamic> u, Color bg, Color fg) => Container(
-    width: 36,
-    height: 36,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      color: bg,
-      border: Border.all(color: fg.withOpacity(0.20)),
-    ),
-    child: Center(
-      child: Text(
-        _initials(u),
-        style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w700, color: fg),
+  Widget _avatar(Map<String, dynamic> u, Color bg, Color fg) {
+    final profileLink = u['profile_link'] as String?;
+    final hasImage = profileLink != null && profileLink.isNotEmpty;
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: bg,
+        border: Border.all(color: fg.withOpacity(0.20)),
       ),
+      child: ClipOval(
+        child: hasImage
+            ? Image.network(profileLink, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _initialsAvatar(u, fg))
+            : _initialsAvatar(u, fg),
+      ),
+    );
+  }
+
+  Widget _initialsAvatar(Map<String, dynamic> u, Color fg) => Center(
+    child: Text(
+      _initials(u),
+      style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w700, color: fg),
     ),
   );
 
@@ -183,14 +254,77 @@ class _SAOfficeMembersPanelState extends State<SAOfficeMembersPanel> with Single
     ),
   );
 
-  // ── actions ───────────────────────────────────────────────────────────────
+  // ── AY selector ────────────────────────────────────────────────────────────
+
+  Widget _aySelector() {
+    if (_loadingAY) {
+      return Container(
+        height: 34,
+        width: 130,
+        decoration: BoxDecoration(
+          color: _surfaceTint,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: _borderDim),
+        ),
+        child: Center(
+          child: SizedBox(
+            width: 13,
+            height: 13,
+            child: CircularProgressIndicator(strokeWidth: 1.6, color: _blue.withOpacity(0.5)),
+          ),
+        ),
+      );
+    }
+
+    final items = <DropdownMenuItem<int?>>[
+      DropdownMenuItem<int?>(
+        value: null,
+        child: Text('All AY', style: GoogleFonts.dmSans(fontSize: 12, color: _textSec)),
+      ),
+      ..._availableAY.map(
+        (ay) => DropdownMenuItem<int?>(
+          value: ay['ay'] as int,
+          child: Text(
+            ay['label'] as String,
+            style: GoogleFonts.dmSans(fontSize: 12, color: _textPri, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ),
+    ];
+
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: _surfaceTint,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _selectedAY != null ? _blue.withOpacity(0.40) : _borderDim),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int?>(
+          value: _selectedAY,
+          items: items,
+          dropdownColor: _surface,
+          icon: Icon(Icons.expand_more_rounded, size: 15, color: _selectedAY != null ? _blue : _textMut),
+          style: GoogleFonts.dmSans(fontSize: 12, color: _textPri),
+          isDense: true,
+          onChanged: (val) {
+            if (val == _selectedAY) return;
+            setState(() => _selectedAY = val);
+            _loadMembers();
+          },
+        ),
+      ),
+    );
+  }
+
+  // ── actions ────────────────────────────────────────────────────────────────
 
   void _openEditDialog(Map<String, dynamic> user) {
     showDialog(
       context: context,
       barrierDismissible: true,
       barrierColor: Colors.black.withOpacity(0.65),
-      // ── FIX: use dialogContext instead of capturing the outer context ──
       builder: (dialogContext) => EditMemberDialog(
         user: user,
         onSaved: (updated) {
@@ -211,10 +345,9 @@ class _SAOfficeMembersPanelState extends State<SAOfficeMembersPanel> with Single
   }
 
   Future<void> _restoreMember(Map<String, dynamic> user) async {
-    final name = _fullName(user);
+    final name = _fullNameExtended(user);
     final cccId = user['ccc_id'] as String;
 
-    // Confirm
     final ok = await showDialog<bool>(
       context: context,
       barrierColor: Colors.black.withOpacity(0.65),
@@ -301,7 +434,7 @@ class _SAOfficeMembersPanelState extends State<SAOfficeMembersPanel> with Single
         AppSnackBar.hide(context, id: 'restore_$cccId');
         if (r['success'] == true) {
           AppSnackBar.success(context, r['message'] ?? '$name restored.');
-          await _load();
+          await _loadMembers();
         } else {
           AppSnackBar.error(context, r['message'] ?? 'Restore failed.');
         }
@@ -314,6 +447,117 @@ class _SAOfficeMembersPanelState extends State<SAOfficeMembersPanel> with Single
     }
   }
 
+  // Future<void> _permanentDeleteMember(Map<String, dynamic> user) async {
+  //   final name = _fullNameExtended(user);
+  //   final cccId = user['ccc_id'] as String;
+
+  //   final ok = await showDialog<bool>(
+  //     context: context,
+  //     barrierColor: Colors.black.withOpacity(0.65),
+  //     builder: (ctx) => Center(
+  //       child: Container(
+  //         width: 480,
+  //         margin: const EdgeInsets.symmetric(horizontal: 24),
+  //         padding: const EdgeInsets.all(20),
+  //         decoration: BoxDecoration(
+  //           color: const Color(0xFF111827),
+  //           borderRadius: BorderRadius.circular(14),
+  //           border: Border.all(color: const Color(0x4D2D5299)),
+  //         ),
+  //         child: Column(
+  //           mainAxisSize: MainAxisSize.min,
+  //           crossAxisAlignment: CrossAxisAlignment.start,
+  //           children: [
+  //             Row(
+  //               children: [
+  //                 Container(
+  //                   padding: const EdgeInsets.all(8),
+  //                   decoration: BoxDecoration(color: _red.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+  //                   child: const Icon(Icons.delete_forever_rounded, size: 16, color: _red),
+  //                 ),
+  //                 const SizedBox(width: 10),
+  //                 Expanded(
+  //                   child: Text(
+  //                     'Permanently delete $name?',
+  //                     style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700, color: _textPri),
+  //                   ),
+  //                 ),
+  //               ],
+  //             ),
+  //             const SizedBox(height: 12),
+  //             Text(
+  //               'This action is irreversible. The member and all associated records will be removed from the system.',
+  //               style: GoogleFonts.dmSans(fontSize: 12, color: _textSec),
+  //             ),
+  //             const SizedBox(height: 16),
+  //             Row(
+  //               children: [
+  //                 Expanded(
+  //                   child: OutlinedButton(
+  //                     onPressed: () => Navigator.pop(ctx, false),
+  //                     style: OutlinedButton.styleFrom(
+  //                       side: BorderSide(color: _borderMed),
+  //                       foregroundColor: _textSec,
+  //                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+  //                     ),
+  //                     child: Text('Cancel', style: GoogleFonts.dmSans(fontSize: 12)),
+  //                   ),
+  //                 ),
+  //                 const SizedBox(width: 8),
+  //                 Expanded(
+  //                   child: ElevatedButton(
+  //                     onPressed: () => Navigator.pop(ctx, true),
+  //                     style: ElevatedButton.styleFrom(
+  //                       backgroundColor: _red,
+  //                       foregroundColor: Colors.white,
+  //                       elevation: 0,
+  //                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+  //                     ),
+  //                     child: Text(
+  //                       'Delete Permanently',
+  //                       style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w700),
+  //                     ),
+  //                   ),
+  //                 ),
+  //               ],
+  //             ),
+  //           ],
+  //         ),
+  //       ),
+  //     ),
+  //   );
+
+  //   if (ok != true || !mounted) return;
+
+  //   AppSnackBar.loading(context, 'Permanently deleting $name…', id: 'perm_delete_$cccId');
+  //   try {
+  //     final r = await RequestHandler().handleRequest(
+  //       'super-admin/permanent-delete-member',
+  //       method: 'POST',
+  //       body: {'ccc_id': cccId},
+  //     );
+  //     if (mounted) {
+  //       AppSnackBar.hide(context, id: 'perm_delete_$cccId');
+  //       if (r['success'] == true) {
+  //         AppSnackBar.success(context, r['message'] ?? '$name permanently deleted.');
+  //         // Remove the member from all lists
+  //         setState(() {
+  //           _supervisors.removeWhere((u) => u['ccc_id'] == cccId);
+  //           _admins.removeWhere((u) => u['ccc_id'] == cccId);
+  //           _members.removeWhere((u) => u['ccc_id'] == cccId);
+  //         });
+  //       } else {
+  //         AppSnackBar.error(context, r['message'] ?? 'Permanent delete failed.');
+  //       }
+  //     }
+  //   } catch (e) {
+  //     if (mounted) {
+  //       AppSnackBar.hide(context, id: 'perm_delete_$cccId');
+  //       AppSnackBar.error(context, 'Error: $e');
+  //     }
+  //   }
+  // }
+
   // ── member row ─────────────────────────────────────────────────────────────
 
   Widget _memberRow(
@@ -324,6 +568,7 @@ class _SAOfficeMembersPanelState extends State<SAOfficeMembersPanel> with Single
   }) {
     final status = user['status'] as String? ?? 'active';
     final isDeleted = status == 'deleted';
+    final ay = user['current_sy'] as int?;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
@@ -342,7 +587,7 @@ class _SAOfficeMembersPanelState extends State<SAOfficeMembersPanel> with Single
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _fullName(user),
+                  _fullNameExtended(user),
                   style: GoogleFonts.dmSans(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -363,6 +608,25 @@ class _SAOfficeMembersPanelState extends State<SAOfficeMembersPanel> with Single
                         ),
                       ),
                     ],
+                    if (ay != null) ...[
+                      Text(' · ', style: GoogleFonts.dmSans(fontSize: 10, color: _textHint)),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: avatarFg.withOpacity(0.10),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: avatarFg.withOpacity(0.20)),
+                        ),
+                        child: Text(
+                          'AY $ay-${ay + 1}',
+                          style: GoogleFonts.dmMono(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                            color: avatarFg.withOpacity(0.75),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -374,14 +638,19 @@ class _SAOfficeMembersPanelState extends State<SAOfficeMembersPanel> with Single
           if (isDeleted) ...[
             _iconBtn(label: 'Restore', color: _green, icon: Icons.restore_rounded, onTap: () => _restoreMember(user)),
             const SizedBox(width: 5),
+            // _iconBtn(
+            //   label: 'Permanent Delete',
+            //   color: _red,
+            //   icon: Icons.delete_forever_rounded,
+            //   onTap: () => _permanentDeleteMember(user),
+            // ),
+            // const SizedBox(width: 5),
           ],
           _iconBtn(label: 'Edit', color: _blue, icon: Icons.edit_rounded, onTap: () => _openEditDialog(user)),
         ],
       ),
     );
   }
-
-  // ── section / tab body ────────────────────────────────────────────────────
 
   Widget _tabBody(
     List<Map<String, dynamic>> raw, {
@@ -391,9 +660,7 @@ class _SAOfficeMembersPanelState extends State<SAOfficeMembersPanel> with Single
     required String emptyLabel,
   }) {
     final list = _filtered(raw);
-    if (list.isEmpty) {
-      return saEmpty(Icons.people_outline_rounded, 'No $emptyLabel found');
-    }
+    if (list.isEmpty) return saEmpty(Icons.people_outline_rounded, 'No $emptyLabel found');
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 80),
       itemCount: list.length,
@@ -425,8 +692,6 @@ class _SAOfficeMembersPanelState extends State<SAOfficeMembersPanel> with Single
       ],
     ),
   );
-
-  // ── search field ───────────────────────────────────────────────────────────
 
   Widget _searchField() => Container(
     height: 34,
@@ -461,7 +726,7 @@ class _SAOfficeMembersPanelState extends State<SAOfficeMembersPanel> with Single
       backgroundColor: _bgBase,
       body: Column(
         children: [
-          // ── Header ──────────────────────────────────────────────────────────
+          // ── Header ────────────────────────────────────────────────────────
           Container(
             decoration: BoxDecoration(
               color: _surface,
@@ -470,7 +735,6 @@ class _SAOfficeMembersPanelState extends State<SAOfficeMembersPanel> with Single
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Back + title row
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                   child: Column(
@@ -497,7 +761,7 @@ class _SAOfficeMembersPanelState extends State<SAOfficeMembersPanel> with Single
                       ),
                       const SizedBox(height: 10),
 
-                      // Office info
+                      // Office info row
                       Row(
                         children: [
                           Container(
@@ -542,7 +806,7 @@ class _SAOfficeMembersPanelState extends State<SAOfficeMembersPanel> with Single
                             height: 32,
                             width: 32,
                             child: OutlinedButton(
-                              onPressed: _loading ? null : _load,
+                              onPressed: _loading ? null : _reload,
                               style: OutlinedButton.styleFrom(
                                 padding: EdgeInsets.zero,
                                 side: BorderSide(color: _borderMed),
@@ -560,9 +824,10 @@ class _SAOfficeMembersPanelState extends State<SAOfficeMembersPanel> with Single
                         ],
                       ),
 
-                      // Count chips + search
                       if (!_loading && _error == null) ...[
                         const SizedBox(height: 12),
+
+                        // Count chips + AY selector on same row
                         Row(
                           children: [
                             _countChip('supervisors', _supervisors.length, _purple),
@@ -571,10 +836,49 @@ class _SAOfficeMembersPanelState extends State<SAOfficeMembersPanel> with Single
                             const SizedBox(width: 7),
                             _countChip('members', _members.length, _green),
                             const Spacer(),
+                            _aySelector(),
                           ],
                         ),
                         const SizedBox(height: 10),
-                        _searchField(),
+
+                        // Search row — with active AY label if filter is on
+                        Row(
+                          children: [
+                            Expanded(child: _searchField()),
+                            if (_selectedAY != null) ...[
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() => _selectedAY = null);
+                                  _loadMembers();
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: _blue.withOpacity(0.09),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: _blue.withOpacity(0.25)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'AY $_selectedAY-${_selectedAY! + 1}',
+                                        style: GoogleFonts.dmSans(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: _blue,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Icon(Icons.close_rounded, size: 12, color: _blue.withOpacity(0.70)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ],
                       const SizedBox(height: 10),
                     ],
@@ -602,9 +906,9 @@ class _SAOfficeMembersPanelState extends State<SAOfficeMembersPanel> with Single
             ),
           ),
 
-          // ── Body ────────────────────────────────────────────────────────────
+          // ── Body ──────────────────────────────────────────────────────────
           Expanded(
-            child: _loading
+            child: _loadingMembers
                 ? const Center(child: CircularProgressIndicator(color: _blue, strokeWidth: 2))
                 : _error != null
                 ? saEmpty(Icons.wifi_off_rounded, 'Failed to load members')

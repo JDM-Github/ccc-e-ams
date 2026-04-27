@@ -310,7 +310,10 @@ class _CustomAppBarState extends State<CustomAppBar> {
               AppTopBar(
                 pageLabel: pageLabel,
                 firstName: user['first_name'] ?? '',
+                middleName: user['middle_name'] ?? '',
                 lastName: user['last_name'] ?? '',
+                suffixName: user['suffix_name'] ?? '',
+                extensionName: user['extension_name'] ?? '',
                 role: user['role'] ?? 'student',
                 course: user['course'] ?? '',
                 officeName: user['office_name'] ?? '',

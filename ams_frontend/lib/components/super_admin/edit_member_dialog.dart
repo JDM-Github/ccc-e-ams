@@ -26,14 +26,8 @@ const Color _textMut = Color(0x66FFFFFF);
 const Color _textHint = Color(0x59FFFFFF);
 
 /// A dialog that lets a super admin edit any user's non-sensitive fields.
-/// Design mirrors EditScheduleDialog — full-width, scrollable body,
-/// header / divider / footer chrome pattern.
 class EditMemberDialog extends StatefulWidget {
-  /// The raw user map returned by GET /office-members/:office_id.
   final Map<String, dynamic> user;
-
-  /// Called with the updated user map on a successful save so the parent
-  /// can refresh its list without a full reload.
   final ValueChanged<Map<String, dynamic>> onSaved;
 
   const EditMemberDialog({super.key, required this.user, required this.onSaved});
@@ -54,14 +48,17 @@ class _EditMemberDialogState extends State<EditMemberDialog> {
   late final TextEditingController _course;
   late final TextEditingController _targetHours;
   late final TextEditingController _customId;
+  late final TextEditingController _extensionName;
+  late String _selectedSuffix;
 
   // ── toggles ───────────────────────────────────────────────────────────────
   late bool _isAdmin;
   late String _role;
   late String _status;
 
-  static const _roles = ['student', 'supervisor'];
-  static const _statuses = ['active', 'pending_for_delete', 'deleted'];
+  static const List<String> _roles = ['student', 'supervisor'];
+  static const List<String> _statuses = ['active', 'pending_for_delete', 'deleted'];
+  static const List<String> _suffixes = ['', 'Jr.', 'Sr.', 'II', 'III', 'IV', 'V'];
 
   @override
   void initState() {
@@ -74,6 +71,11 @@ class _EditMemberDialogState extends State<EditMemberDialog> {
     _course = TextEditingController(text: u['course'] as String? ?? '');
     _targetHours = TextEditingController(text: '${u['target_hours'] ?? 450}');
     _customId = TextEditingController(text: u['custom_id'] as String? ?? '');
+    _extensionName = TextEditingController(text: (u['extension_name'] as String? ?? '').trim());
+
+    final suffix = (u['suffix_name'] as String? ?? '').trim();
+    _selectedSuffix = _suffixes.contains(suffix) ? suffix : '';
+
     _isAdmin = (u['isAdmin'] as bool?) ?? false;
     _role = (u['role'] as String?) ?? 'student';
     _status = (u['status'] as String?) ?? 'active';
@@ -88,6 +90,7 @@ class _EditMemberDialogState extends State<EditMemberDialog> {
     _course.dispose();
     _targetHours.dispose();
     _customId.dispose();
+    _extensionName.dispose();
     super.dispose();
   }
 
@@ -102,6 +105,8 @@ class _EditMemberDialogState extends State<EditMemberDialog> {
       'first_name': _firstName.text.trim(),
       'middle_name': _middleName.text.trim(),
       'last_name': _lastName.text.trim(),
+      'suffix_name': _selectedSuffix.trim().isEmpty ? null : _selectedSuffix.trim(),
+      'extension_name': _extensionName.text.trim().isEmpty ? null : _extensionName.text.trim(),
       'email': _email.text.trim(),
       'course': _course.text.trim(),
       'target_hours': int.tryParse(_targetHours.text.trim()) ?? 450,
@@ -123,347 +128,79 @@ class _EditMemberDialogState extends State<EditMemberDialog> {
         AppSnackBar.error(context, r['message'] ?? 'Update failed.');
       }
     } catch (e) {
-      // if (mounted) AppSnackBar.error(context, 'Error: $e');
+      if (mounted) AppSnackBar.error(context, 'Error: $e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  // ── build ─────────────────────────────────────────────────────────────────
+  // ── helpers ────────────────────────────────────────────────────────────────
 
-  @override
-  Widget build(BuildContext context) {
-    final initials = _initials();
-    final hasWarning = _status != 'active';
+  /// Returns the full name (first + middle initial + last) for the avatar fallback.
+  String _initials() {
+    final f = _firstName.text.isNotEmpty ? _firstName.text[0] : '';
+    final l = _lastName.text.isNotEmpty ? _lastName.text[0] : '';
+    return '$f$l'.toUpperCase();
+  }
 
-    return Material(
-      type: MaterialType.transparency,
-      child: Center(
-        child: Container(
-          width: 480,
-          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
-          decoration: BoxDecoration(
-            color: _surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _borderStrong),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.40), blurRadius: 32, offset: const Offset(0, 12))],
-          ),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // ── Header ───────────────────────────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-                  child: Row(
-                    children: [
-                      // Avatar
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: _blue.withOpacity(0.14),
-                          border: Border.all(color: _blue.withOpacity(0.22)),
-                        ),
-                        child: Center(
-                          child: Text(
-                            initials,
-                            style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700, color: _blue),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Edit Member',
-                              style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: _textPri),
-                            ),
-                            Text(
-                              widget.user['ccc_id'] as String? ?? '',
-                              style: GoogleFonts.dmMono(fontSize: 11, color: _textMut),
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Close
-                      GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: _surfaceTint,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: _borderMed),
-                          ),
-                          child: const Icon(Icons.close_rounded, size: 16, color: _textSec),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+  /// Shows the avatar image if profile_link exists, otherwise initials.
+  Widget _buildAvatar() {
+    final profileLink = widget.user['profile_link'] as String?;
+    final hasImage = profileLink != null && profileLink.isNotEmpty;
 
-                _dividerLine(),
-
-                // ── Body ─────────────────────────────────────────────────────
-                ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.62),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Status warning banner
-                        if (hasWarning) ...[
-                          _warningBanner(
-                            _status == 'deleted'
-                                ? 'This account is soft-deleted. Changes will still be saved.'
-                                : 'This account is pending deletion.',
-                            _status == 'deleted' ? _red : _amber,
-                          ),
-                          const SizedBox(height: 14),
-                        ],
-
-                        // ── Name ─────────────────────────────────────────────
-                        _sectionLabel('Full Name'),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _field(
-                                controller: _firstName,
-                                label: 'First name',
-                                icon: Icons.person_outline_rounded,
-                                required: true,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: _field(
-                                controller: _lastName,
-                                label: 'Last name',
-                                icon: Icons.person_outline_rounded,
-                                required: true,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        _field(
-                          controller: _middleName,
-                          label: 'Middle name (optional)',
-                          icon: Icons.person_outline_rounded,
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        // ── Contact ──────────────────────────────────────────
-                        _sectionLabel('Contact'),
-                        const SizedBox(height: 8),
-                        _field(
-                          controller: _email,
-                          label: 'Email',
-                          icon: Icons.email_outlined,
-                          required: true,
-                          keyboardType: TextInputType.emailAddress,
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) return 'Required';
-                            final ok = RegExp(r'^[\w\.\+\-]+@([\w\-]+\.)+[a-zA-Z]{2,}$').hasMatch(v.trim());
-                            return ok ? null : 'Invalid email';
-                          },
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        // ── Academic ─────────────────────────────────────────
-                        _sectionLabel('Academic'),
-                        const SizedBox(height: 8),
-                        _field(
-                          controller: _course,
-                          label: 'Course / Program',
-                          icon: Icons.school_outlined,
-                          required: _role == 'student',
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _field(
-                                controller: _targetHours,
-                                label: 'Target hours',
-                                icon: Icons.timer_outlined,
-                                required: _role == 'student',
-                                keyboardType: TextInputType.number,
-                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                validator: (v) {
-                                  if (_role != 'student') return null;
-                                  final n = int.tryParse(v?.trim() ?? '');
-                                  if (n == null || n < 1) return 'Enter a valid number';
-                                  return null;
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: _field(
-                                controller: _customId,
-                                label: 'Custom ID (optional)',
-                                icon: Icons.badge_outlined,
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        // ── Permissions ──────────────────────────────────────
-                        _sectionLabel('Role & Permissions'),
-                        const SizedBox(height: 8),
-
-                        // Role dropdown
-                        _dropdownTile<String>(
-                          icon: Icons.manage_accounts_outlined,
-                          label: 'Role',
-                          value: _role,
-                          items: _roles,
-                          display: (v) => v == 'student' ? 'Student' : 'Supervisor',
-                          onChanged: (v) {
-                            if (v != null) {
-                              setState(() {
-                                _role = v;
-                                if (v == 'supervisor') _isAdmin = false;
-                              });
-                            }
-                          },
-                        ),
-
-                        // const SizedBox(height: 8),
-
-                        // // isAdmin toggle — only relevant for students
-                        // if (_role == 'student')
-                        //   _toggleCard(
-                        //     label: 'Admin privileges',
-                        //     subtitle: 'Can manage members of this office',
-                        //     icon: Icons.admin_panel_settings_outlined,
-                        //     value: _isAdmin,
-                        //     onChanged: (v) => setState(() => _isAdmin = v),
-                        //   ),
-
-                        const SizedBox(height: 16),
-
-                        // ── Status ───────────────────────────────────────────
-                        _sectionLabel('Account Status'),
-                        const SizedBox(height: 8),
-                        _dropdownTile<String>(
-                          icon: Icons.info_outline_rounded,
-                          label: 'Status',
-                          value: _status,
-                          items: _statuses,
-                          display: (v) => switch (v) {
-                            'active' => 'Active',
-                            'pending_for_delete' => 'Pending deletion',
-                            'deleted' => 'Deleted (soft)',
-                            _ => v,
-                          },
-                          onChanged: (v) {
-                            if (v != null) setState(() => _status = v);
-                          },
-                          valueColor: switch (_status) {
-                            'active' => _green,
-                            'pending_for_delete' => _amber,
-                            'deleted' => _red,
-                            _ => _textSec,
-                          },
-                        ),
-
-                        const SizedBox(height: 18),
-                      ],
-                    ),
-                  ),
-                ),
-
-                _dividerLine(),
-
-                // ── Footer ───────────────────────────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
-                  child: Row(
-                    children: [
-                      // Cancel
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _saving ? null : () => Navigator.pop(context),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: _textSec,
-                            side: BorderSide(color: _borderMed),
-                            padding: const EdgeInsets.symmetric(vertical: 11),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          child: Text(
-                            'Cancel',
-                            style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: _textSec),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      // Save
-                      Expanded(
-                        flex: 2,
-                        child: ElevatedButton.icon(
-                          onPressed: _saving ? null : _save,
-                          icon: _saving
-                              ? const SizedBox(
-                                  width: 14,
-                                  height: 14,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation(Colors.white),
-                                  ),
-                                )
-                              : const Icon(Icons.check_circle_outline_rounded, size: 16),
-                          label: Text(
-                            _saving ? 'Saving…' : 'Save Changes',
-                            style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _blue,
-                            foregroundColor: Colors.white,
-                            disabledBackgroundColor: _blue.withOpacity(0.45),
-                            disabledForegroundColor: Colors.white54,
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(vertical: 11),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: _blue.withOpacity(0.14),
+        border: Border.all(color: _blue.withOpacity(0.22)),
+      ),
+      child: ClipOval(
+        child: hasImage
+            ? Image.network(profileLink, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _initialsAvatar())
+            : _initialsAvatar(),
       ),
     );
   }
 
-  // ── sub-widgets ───────────────────────────────────────────────────────────
-
-  String _initials() {
-    final f = (_firstName.text.isNotEmpty) ? _firstName.text[0] : '';
-    final l = (_lastName.text.isNotEmpty) ? _lastName.text[0] : '';
-    return '$f$l'.toUpperCase();
+  Widget _initialsAvatar() {
+    return Center(
+      child: Text(
+        _initials(),
+        style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700, color: _blue),
+      ),
+    );
   }
+
+  // ── sub‑widgets ───────────────────────────────────────────────────────────
 
   Widget _dividerLine() => Divider(height: 1, thickness: 1, color: _divider);
 
   Widget _sectionLabel(String label) => Text(
     label.toUpperCase(),
     style: GoogleFonts.dmSans(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.8, color: _textMut),
+  );
+
+  Widget _warningBanner(String message, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.10),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: color.withOpacity(0.25)),
+    ),
+    child: Row(
+      children: [
+        Icon(Icons.warning_amber_rounded, size: 15, color: color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            message,
+            style: GoogleFonts.dmSans(fontSize: 12, color: color, fontWeight: FontWeight.w500),
+          ),
+        ),
+      ],
+    ),
   );
 
   Widget _field({
@@ -569,24 +306,317 @@ class _EditMemberDialogState extends State<EditMemberDialog> {
     );
   }
 
-  Widget _warningBanner(String message, Color color) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    decoration: BoxDecoration(
-      color: color.withOpacity(0.10),
-      borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: color.withOpacity(0.25)),
-    ),
-    child: Row(
-      children: [
-        Icon(Icons.warning_amber_rounded, size: 15, color: color),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            message,
-            style: GoogleFonts.dmSans(fontSize: 12, color: color, fontWeight: FontWeight.w500),
+  // ── build ─────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final hasWarning = _status != 'active';
+
+    return Material(
+      type: MaterialType.transparency,
+      child: Center(
+        child: Container(
+          width: 480,
+          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
+          decoration: BoxDecoration(
+            color: _surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _borderStrong),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.40), blurRadius: 32, offset: const Offset(0, 12))],
+          ),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // ── Header ───────────────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                  child: Row(
+                    children: [
+                      _buildAvatar(),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Edit Member',
+                              style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: _textPri),
+                            ),
+                            Text(
+                              widget.user['ccc_id'] as String? ?? '',
+                              style: GoogleFonts.dmMono(fontSize: 11, color: _textMut),
+                            ),
+                          ],
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: _surfaceTint,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: _borderMed),
+                          ),
+                          child: const Icon(Icons.close_rounded, size: 16, color: _textSec),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                _dividerLine(),
+
+                // ── Body ─────────────────────────────────────────────────────
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.62),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (hasWarning) ...[
+                          _warningBanner(
+                            _status == 'deleted'
+                                ? 'This account is soft-deleted. Changes will still be saved.'
+                                : 'This account is pending deletion.',
+                            _status == 'deleted' ? _red : _amber,
+                          ),
+                          const SizedBox(height: 14),
+                        ],
+
+                        // ── Name (first, middle, last, suffix, extension) ────
+                        _sectionLabel('Full Name'),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _field(
+                                controller: _firstName,
+                                label: 'First name',
+                                icon: Icons.person_outline_rounded,
+                                required: true,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _field(
+                                controller: _lastName,
+                                label: 'Last name',
+                                icon: Icons.person_outline_rounded,
+                                required: true,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _field(
+                                controller: _middleName,
+                                label: 'Middle name (optional)',
+                                icon: Icons.person_outline_rounded,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _dropdownTile<String>(
+                                icon: Icons.text_fields_rounded,
+                                label: 'Suffix (optional)',
+                                value: _selectedSuffix,
+                                items: _suffixes,
+                                display: (v) => v.isEmpty ? 'None' : v,
+                                onChanged: (val) {
+                                  if (val != null) setState(() => _selectedSuffix = val);
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        _field(
+                          controller: _extensionName,
+                          label: 'Extension (e.g., PhD, MD)',
+                          icon: Icons.emoji_objects_outlined,
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // ── Contact ──────────────────────────────────────────
+                        _sectionLabel('Contact'),
+                        const SizedBox(height: 8),
+                        _field(
+                          controller: _email,
+                          label: 'Email',
+                          icon: Icons.email_outlined,
+                          required: true,
+                          keyboardType: TextInputType.emailAddress,
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return 'Required';
+                            final ok = RegExp(r'^[\w\.\+\-]+@([\w\-]+\.)+[a-zA-Z]{2,}$').hasMatch(v.trim());
+                            return ok ? null : 'Invalid email';
+                          },
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // ── Academic ─────────────────────────────────────────
+                        _sectionLabel('Academic'),
+                        const SizedBox(height: 8),
+                        _field(
+                          controller: _course,
+                          label: 'Course / Program',
+                          icon: Icons.school_outlined,
+                          required: _role == 'student',
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _field(
+                                controller: _targetHours,
+                                label: 'Target hours',
+                                icon: Icons.timer_outlined,
+                                required: _role == 'student',
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                validator: (v) {
+                                  if (_role != 'student') return null;
+                                  final n = int.tryParse(v?.trim() ?? '');
+                                  if (n == null || n < 1) return 'Enter a valid number';
+                                  return null;
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _field(
+                                controller: _customId,
+                                label: 'Custom ID (optional)',
+                                icon: Icons.badge_outlined,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // ── Role & Permissions ───────────────────────────────
+                        _sectionLabel('Role & Permissions'),
+                        const SizedBox(height: 8),
+                        _dropdownTile<String>(
+                          icon: Icons.manage_accounts_outlined,
+                          label: 'Role',
+                          value: _role,
+                          items: _roles,
+                          display: (v) => v == 'student' ? 'Student' : 'Supervisor',
+                          onChanged: (v) {
+                            if (v != null) {
+                              setState(() {
+                                _role = v;
+                                if (v == 'supervisor') _isAdmin = false;
+                              });
+                            }
+                          },
+                        ),
+
+                        // (Admin toggle removed – handled by role)
+                        const SizedBox(height: 16),
+
+                        // ── Account Status ───────────────────────────────────
+                        _sectionLabel('Account Status'),
+                        const SizedBox(height: 8),
+                        _dropdownTile<String>(
+                          icon: Icons.info_outline_rounded,
+                          label: 'Status',
+                          value: _status,
+                          items: _statuses,
+                          display: (v) => switch (v) {
+                            'active' => 'Active',
+                            'pending_for_delete' => 'Pending deletion',
+                            'deleted' => 'Deleted (soft)',
+                            _ => v,
+                          },
+                          onChanged: (v) {
+                            if (v != null) setState(() => _status = v);
+                          },
+                          valueColor: switch (_status) {
+                            'active' => _green,
+                            'pending_for_delete' => _amber,
+                            'deleted' => _red,
+                            _ => _textSec,
+                          },
+                        ),
+
+                        const SizedBox(height: 18),
+                      ],
+                    ),
+                  ),
+                ),
+
+                _dividerLine(),
+
+                // ── Footer ───────────────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _saving ? null : () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _textSec,
+                            side: BorderSide(color: _borderMed),
+                            padding: const EdgeInsets.symmetric(vertical: 11),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: Text(
+                            'Cancel',
+                            style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: _textSec),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton.icon(
+                          onPressed: _saving ? null : _save,
+                          icon: _saving
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation(Colors.white),
+                                  ),
+                                )
+                              : const Icon(Icons.check_circle_outline_rounded, size: 16),
+                          label: Text(
+                            _saving ? 'Saving…' : 'Save Changes',
+                            style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _blue,
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor: _blue.withOpacity(0.45),
+                            disabledForegroundColor: Colors.white54,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 11),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 }

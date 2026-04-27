@@ -1180,7 +1180,36 @@ class _DashboardPageState extends State<DashboardPage>
     );
   }
 
-  // ── Students card ─────────────────────────────────────────────────────────
+  String _formatFullName(
+    String firstName,
+    String middleName,
+    String lastName,
+    String suffixName, [
+    String? extensionName,
+  ]) {
+    String base;
+    if (middleName.trim().isNotEmpty) {
+      final middleInitials = middleName
+          .trim()
+          .split(RegExp(r'\s+'))
+          .map((word) => word.isNotEmpty ? word[0].toUpperCase() : '')
+          .join('.');
+      base = '$firstName $middleInitials. $lastName';
+    } else {
+      base = '$firstName $lastName';
+    }
+
+    final suffix = suffixName.trim();
+    if (suffix.isNotEmpty) {
+      base = '$base, $suffix';
+    }
+
+    final ext = extensionName?.trim();
+    if (ext != null && ext.isNotEmpty) {
+      base = '$base, $ext';
+    }
+    return base;
+  }
 
   Widget _studentsCard(List<Map> students, bool isDark) {
     if (students.isEmpty) {
@@ -1213,7 +1242,11 @@ class _DashboardPageState extends State<DashboardPage>
           final i = e.key;
           final s = e.value;
           final firstName = s['first_name'] as String? ?? '';
+          final middleName = s['middle_name'] as String? ?? '';
           final lastName = s['last_name'] as String? ?? '';
+          final suffixName = s['suffix_name'] as String? ?? '';
+          final extensionName = s['extension_name'] as String? ?? '';
+
           final rendered =
               (s['total_rendered_hours'] as num?)?.toDouble() ??
                   0;
@@ -1235,30 +1268,7 @@ class _DashboardPageState extends State<DashboardPage>
                     color: ThemeManager.dividerColor(context)),
               Row(
                 children: [
-                  Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFF1B3769)
-                          .withOpacity(isDark ? 0.20 : 0.10),
-                    ),
-                    child: Center(
-                      child: Text(
-                        ((firstName.isNotEmpty
-                                    ? firstName[0]
-                                    : '') +
-                                (lastName.isNotEmpty
-                                    ? lastName[0]
-                                    : ''))
-                            .toUpperCase(),
-                        style: GoogleFonts.dmSans(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF1B3769)),
-                      ),
-                    ),
-                  ),
+                  _buildStudentAvatar(s, 34),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -1269,7 +1279,7 @@ class _DashboardPageState extends State<DashboardPage>
                           children: [
                             Expanded(
                               child: Text(
-                                '$firstName $lastName',
+                                _formatFullName(firstName, middleName, lastName, suffixName, extensionName),
                                 overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.dmSans(
                                     fontSize: 12,
@@ -1409,6 +1419,37 @@ class _DashboardPageState extends State<DashboardPage>
   // ══════════════════════════════════════════════════════════════════════════
   // SHARED HELPERS
   // ══════════════════════════════════════════════════════════════════════════
+
+  Widget _buildStudentAvatar(Map student, double size) {
+    final String? profileLink = student['profile_link'] ?? student['profileLink'];
+    final String firstName = student['first_name'] as String? ?? '';
+    final String lastName = student['last_name'] as String? ?? '';
+    final String initials = (firstName.isNotEmpty ? firstName[0] : '') + (lastName.isNotEmpty ? lastName[0] : '');
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF1B3769).withOpacity(0.12)),
+      child: ClipOval(
+        child: profileLink != null && profileLink.isNotEmpty
+            ? Image.network(
+                profileLink,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _buildInitialsAvatar(initials, size),
+              )
+            : _buildInitialsAvatar(initials, size),
+      ),
+    );
+  }
+
+  Widget _buildInitialsAvatar(String initials, double size) {
+    return Center(
+      child: Text(
+        initials.isEmpty ? '?' : initials.toUpperCase(),
+        style: GoogleFonts.dmSans(fontSize: size * 0.4, fontWeight: FontWeight.w700, color: const Color(0xFF1B3769)),
+      ),
+    );
+  }
 
   Widget _card({
     required IconData icon,

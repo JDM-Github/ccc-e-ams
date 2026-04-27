@@ -289,13 +289,48 @@ class _OfficePageState extends State<OfficePage> with TickerProviderStateMixin {
     );
   }
 
+  String _formatFullName(
+    String firstName,
+    String middleName,
+    String lastName,
+    String suffixName, [
+    String? extensionName,
+  ]) {
+    String base;
+    if (middleName.trim().isNotEmpty) {
+      final middleInitials = middleName
+          .trim()
+          .split(RegExp(r'\s+'))
+          .map((word) => word.isNotEmpty ? word[0].toUpperCase() : '')
+          .join('.');
+      base = '$firstName $middleInitials. $lastName';
+    } else {
+      base = '$firstName $lastName';
+    }
+
+    final suffix = suffixName.trim();
+    if (suffix.isNotEmpty) {
+      base = '$base, $suffix';
+    }
+
+    final ext = extensionName?.trim();
+    if (ext != null && ext.isNotEmpty) {
+      base = '$base, $ext';
+    }
+    return base;
+  }
+
   // ── Cards using the new `card` from dialogue_helpers.dart ─────────────────
 
   Widget _buildIdentityCard(bool isDark) {
     final u = controller.user;
-    final fullName =
-        '${u['first_name'] ?? ''} ${u['middle_name'] != null && (u['middle_name'] as String).isNotEmpty ? '${(u['middle_name'] as String)[0]}. ' : ''}${u['last_name'] ?? ''}'
-            .trim();
+    final fullName = _formatFullName(
+      u['first_name'] ?? '',
+      u['middle_name'] ?? '',
+      u['last_name'] ?? '',
+      u['suffix_name'] ?? '',
+      u['extension_name'],
+    );
 
     return card(
       context,
