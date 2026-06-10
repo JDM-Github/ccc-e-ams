@@ -26,10 +26,13 @@ class OfficeController extends ChangeNotifier {
   bool _allowWeekend = false;
 
   late TextEditingController officeNameCtrl;
+  late TextEditingController officeAcronymCtrl;
   late TextEditingController timeInStartCtrl;
   late TextEditingController timeInStartWfhCtrl;
   late TextEditingController timeInEndCtrl;
   late TextEditingController timeOutCapCtrl;
+  late TextEditingController officeVisionCtrl;
+  late TextEditingController officeMissionCtrl;
 
   OfficeController({required this.loginStore}) {
     _initControllers();
@@ -47,10 +50,13 @@ class OfficeController extends ChangeNotifier {
   void _initControllers() {
     final u = user;
     officeNameCtrl = TextEditingController(text: u['office_name'] ?? '');
+    officeAcronymCtrl = TextEditingController(text: u['office_acronym'] ?? '');
     timeInStartCtrl = TextEditingController(text: u['time_in_start'] ?? '06:30:00');
     timeInStartWfhCtrl = TextEditingController(text: u['time_in_start_wfh'] ?? '08:00:00');
     timeInEndCtrl = TextEditingController(text: u['time_in_end'] ?? '17:00:00');
     timeOutCapCtrl = TextEditingController(text: u['time_out_cap'] ?? '21:00:00');
+    officeVisionCtrl = TextEditingController(text: u['office_vision'] ?? '');
+    officeMissionCtrl = TextEditingController(text: u['office_mission'] ?? '');
     _allowWeekend = u['allow_weekend'] ?? false;
   }
 
@@ -81,6 +87,9 @@ class OfficeController extends ChangeNotifier {
         body: {
           'ccc_id': cccId,
           'office_name': officeNameCtrl.text.trim(),
+          'office_acronym': officeAcronymCtrl.text.trim(),
+          'office_vision': officeVisionCtrl.text.trim(),
+          'office_mission': officeMissionCtrl.text.trim(),
           'time_in_start': timeInStartCtrl.text.trim(),
           'time_in_start_wfh': timeInStartWfhCtrl.text.trim(),
           'time_in_end': timeInEndCtrl.text.trim(),
@@ -88,10 +97,12 @@ class OfficeController extends ChangeNotifier {
           'allow_weekend': _allowWeekend,
         },
       );
-
       if (response['success'] == true) {
         final updated = Map<String, dynamic>.from(user);
         updated['office_name'] = officeNameCtrl.text.trim();
+        updated['office_acronym'] = officeAcronymCtrl.text.trim();
+        updated['office_vision'] = officeVisionCtrl.text.trim();
+        updated['office_mission'] = officeMissionCtrl.text.trim();
         updated['time_in_start'] = timeInStartCtrl.text.trim();
         updated['time_in_start_wfh'] = timeInStartWfhCtrl.text.trim();
         updated['time_in_end'] = timeInEndCtrl.text.trim();
@@ -99,7 +110,6 @@ class OfficeController extends ChangeNotifier {
         updated['allow_weekend'] = _allowWeekend;
         loginStore.user.value = updated;
         loginStore.saveUser(updated, loginStore.rememberMe.value);
-
         _isEditing = false;
         notifyListeners();
         if (context.mounted) AppSnackBar.success(context, 'Office settings updated successfully.');
@@ -265,5 +275,7 @@ class OfficeController extends ChangeNotifier {
     timeInStartWfhCtrl.dispose();
     timeInEndCtrl.dispose();
     timeOutCapCtrl.dispose();
+    officeVisionCtrl.dispose();
+    officeMissionCtrl.dispose();
   }
 }

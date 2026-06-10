@@ -1,23 +1,68 @@
 import 'package:ccc_ojt_schedule/components/dialogue_helpers.dart';
 import 'package:ccc_ojt_schedule/components/theme_manager.dart';
+import 'package:ccc_ojt_schedule/handle_request.dart';
 import 'package:ccc_ojt_schedule/store/login_store.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class AboutPage extends StatelessWidget {
+class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
 
-  static const String _version = '1.0.0';
-  static const String _buildNumber = '2026.03';
+  @override
+  State<AboutPage> createState() => _AboutPageState();
+}
+
+class _AboutPageState extends State<AboutPage> {
+  static const String _version = '1.0.1';
+  static const String _buildNumber = '2026.06';
+
+  String _vision =
+      'A reputable and internationally engaged local university that produces future-ready global professionals by 2035.';
+  String _mission =
+      'Cultivating future-ready global professionals through inclusive education, research-oriented culture and collaborative partnerships.';
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchCollegeInfo();
+  }
+
+  Future<void> _fetchCollegeInfo() async {
+    setState(() => _isLoading = true);
+    try {
+      final response = await RequestHandler().handleRequest('user/college-info', method: 'GET');
+      if (response['success'] == true && response['info'] != null) {
+        final info = response['info'];
+        setState(() {
+          _vision = info['vision'] ?? _vision;
+          _mission = info['mission'] ?? _mission;
+        });
+      }
+    } catch (_) {
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final isLandscape = MediaQuery.of(context).size.width > MediaQuery.of(context).size.height;
-    final officeName = LoginStore().user.value['office_name'] ?? 'OJT Office';
+    final officeName = LoginStore().user.value['office_name'] ?? 'Office';
 
     return Scaffold(
       backgroundColor: ThemeManager.scaffold(context),
-      body: isLandscape ? _buildPcContent(context, officeName) : _buildMobileContent(context, officeName),
+      body: Stack(
+        children: [
+          isLandscape ? _buildPcContent(context, officeName) : _buildMobileContent(context, officeName),
+          if (_isLoading)
+            const Positioned(
+              top: 12,
+              right: 12,
+              child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+        ],
+      ),
     );
   }
 
@@ -104,7 +149,6 @@ class AboutPage extends StatelessWidget {
             child: Image.asset('assets/ccc_icon.png', fit: BoxFit.contain),
           ),
           const SizedBox(width: 16),
-
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -129,10 +173,7 @@ class AboutPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  '$officeName — OJT Management',
-                  style: GoogleFonts.dmSans(color: Colors.white.withOpacity(0.55), fontSize: 12),
-                ),
+                Text(officeName, style: GoogleFonts.dmSans(color: Colors.white.withOpacity(0.55), fontSize: 12)),
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
@@ -141,6 +182,42 @@ class AboutPage extends StatelessWidget {
                     _heroBadge(Icons.verified_rounded, 'v$_version'),
                     _heroBadge(Icons.calendar_today_rounded, 'Build $_buildNumber'),
                     _heroBadge(Icons.devices_rounded, 'Cross-Platform'),
+                    // ── Reload button ────────────────────────────────────────
+                    GestureDetector(
+                      onTap: _isLoading ? null : _fetchCollegeInfo,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.10),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white.withOpacity(0.18)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _isLoading
+                                ? SizedBox(
+                                    width: 10,
+                                    height: 10,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 1.5,
+                                      color: Colors.white.withOpacity(0.75),
+                                    ),
+                                  )
+                                : Icon(Icons.refresh_rounded, size: 10, color: Colors.white.withOpacity(0.75)),
+                            const SizedBox(width: 5),
+                            Text(
+                              'Reload',
+                              style: GoogleFonts.dmSans(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white.withOpacity(0.88),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -182,7 +259,7 @@ class AboutPage extends StatelessWidget {
       iconColor: const Color(0xFF7C3AED),
       title: 'Vision',
       child: Text(
-        'A reputable and internationally engaged local university that produces future-ready global professionals by 2035.',
+        _vision,
         style: GoogleFonts.dmSans(fontSize: 13, color: ThemeManager.bodyColor(context), height: 1.65),
       ),
     );
@@ -197,7 +274,7 @@ class AboutPage extends StatelessWidget {
       iconColor: const Color(0xFFDB2777),
       title: 'Mission',
       child: Text(
-        'Cultivating future-ready global professionals through inclusive education, research-oriented culture and collaborative partnerships.',
+        _mission,
         style: GoogleFonts.dmSans(fontSize: 13, color: ThemeManager.bodyColor(context), height: 1.65),
       ),
     );
@@ -235,13 +312,13 @@ class AboutPage extends StatelessWidget {
         Icons.table_chart_outlined,
         const Color(0xFF16A34A),
         'Excel Export',
-        'Download complete OJT records as formatted Excel reports with custom date ranges.',
+        'Download complete members records as formatted Excel reports with custom date ranges.',
       ),
       (
         Icons.groups_outlined,
         const Color(0xFF1B3769),
         'Member Management',
-        'Supervisors can view and manage all registered OJT students in their office.',
+        'Supervisors can view and manage all registered members students in their office.',
       ),
       (
         Icons.school_outlined,

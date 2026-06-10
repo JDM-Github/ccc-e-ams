@@ -218,7 +218,7 @@ class RecordItem extends StatelessWidget {
                                 Text(
                                   'OUT:',
                                   style: GoogleFonts.dmSans(
-                                    fontSize: 12,
+                                    fontSize: 10,
                                     color: ThemeManager.blue(context),
                                     fontWeight: FontWeight.w700,
                                   ),
@@ -227,7 +227,7 @@ class RecordItem extends StatelessWidget {
                                 Text(
                                   '5:00 PM',
                                   style: GoogleFonts.dmSans(
-                                    fontSize: 13,
+                                    fontSize: 10,
                                     fontWeight: FontWeight.w600,
                                     color: isNotRecorded ? ThemeManager.muted(context) : Colors.orange[700],
                                   ),
@@ -408,7 +408,7 @@ class RecordItem extends StatelessWidget {
         const SizedBox(width: 5),
         Text(
           '$label:',
-          style: GoogleFonts.dmSans(fontSize: 12, color: ThemeManager.blue(context), fontWeight: FontWeight.w700),
+          style: GoogleFonts.dmSans(fontSize: 10, color: ThemeManager.blue(context), fontWeight: FontWeight.w700),
         ),
         const SizedBox(width: 5),
         Column(
@@ -418,7 +418,7 @@ class RecordItem extends StatelessWidget {
             Text(
               time.format(context),
               style: GoogleFonts.dmSans(
-                fontSize: 13,
+                fontSize: 10,
                 fontWeight: FontWeight.w600,
                 color: ThemeManager.primary(context),
               ),

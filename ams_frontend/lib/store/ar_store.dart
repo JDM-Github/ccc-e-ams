@@ -141,38 +141,38 @@ class ARStore extends ChangeNotifier {
     }
   }
 
-  Future<void> deleteImage(String currentDate, String imageId) async {
+  Future<bool> deleteImage(String currentDate, String imageId) async {
     try {
       final images = _arImages[currentDate];
-      if (images == null) return;
+      if (images == null) return false;
       final index = images.indexWhere((img) => img.id == imageId);
-      if (index == -1) return;
-
+      if (index == -1) return false;
       final image = images[index];
+
       if (image.isInDatabase) {
         if (await _syncDeleteImage(imageId)) {
           images.removeAt(index);
-          if (images.isEmpty) {
-            _arImages.remove(currentDate);
-          }
+          if (images.isEmpty) _arImages.remove(currentDate);
           await saveToLocal();
           notifyListeners();
+          return true;
         } else {
           _error = 'Failed to delete image from server';
           notifyListeners();
+          return false;
         }
       } else {
         images.removeAt(index);
-        if (images.isEmpty) {
-          _arImages.remove(currentDate);
-        }
+        if (images.isEmpty) _arImages.remove(currentDate);
         await saveToLocal();
         notifyListeners();
+        return true;
       }
     } catch (e) {
       debugPrint('Error deleting AR image: $e');
       _error = 'Failed to delete image';
       notifyListeners();
+      return false;
     }
   }
 

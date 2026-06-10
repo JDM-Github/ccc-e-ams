@@ -1,5 +1,8 @@
 // Author: JDM
 // Created on: 2026-04-13T04:22:50.726Z
+// Updated: use attachProgress from progress.js (mirrors get-all-users pattern).
+//          Schedule queries are automatically scoped to each student's
+//          current_sy inside attachProgress.
 
 const express = require("express");
 const { Op } = require("sequelize");
@@ -14,8 +17,10 @@ const {
 	Summary,
 	SuperAdminLog,
 } = require("../models/Models");
+const { attachProgress, computeProgress } = require("./utils/progress");
 
 class DashboardRouter {
+
 	constructor() {
 		this.router = express.Router();
 		this.getRouter();
@@ -26,8 +31,6 @@ class DashboardRouter {
 
 		// ─────────────────────────────────────────────────────────────────────
 		// STUDENT DASHBOARD  GET /dashboard/student/:ccc_id
-		// Returns the authenticated student's profile summary, OJT progress,
-		// recent schedule entries, latest activity records, and daily summary.
 		// ─────────────────────────────────────────────────────────────────────
 		this.router.get("/student/:ccc_id", async (req, res) => {
 			try {
@@ -59,50 +62,37 @@ class DashboardRouter {
 					return res.status(404).json({ message: "Student not found." });
 				}
 
-				// ── 2. OJT hours progress ─────────────────────────────────────
-				// Fetch all completed (time_out present) schedule entries for the
-				// student in the current school year to compute total rendered hours.
-				const completedSchedules = await Schedule.findAll({
+				// ── 2. OJT progress via attachProgress ────────────────────────
+				// Mirrors get-all-users: pass the student in an array, get back
+				// the same shape with completed_hours / progress / is_done etc.
+				const [studentWithProgress] = await attachProgress([student], student.current_sy);
+
+				// ── 3. Recent schedules (last 7 with a time_out, same SY) ─────
+				const sy = student.current_sy;
+				const recentSchedules = await Schedule.findAll({
 					where: {
 						ccc_id,
+						date: { [Op.between]: [`${sy}-01-01`, `${sy}-12-31`] },
 						time_out: { [Op.ne]: null },
 					},
-					attributes: ["date", "time_in", "time_out", "isWorkFromHome"],
+					attributes: [
+						"date", "time_in", "time_out",
+						"isWorkFromHome", "isAcceptedWorkFromHome", "isAcceptedEarly",
+					],
 					order: [["date", "DESC"]],
+					limit: 7,
 				});
 
-				// Compute total rendered hours from time_in / time_out strings.
-				const totalRenderedHours = completedSchedules.reduce((acc, s) => {
-					const [inH, inM, inS] = s.time_in.split(":").map(Number);
-					const [outH, outM, outS] = s.time_out.split(":").map(Number);
-					const diff =
-						(outH * 3600 + outM * 60 + outS) -
-						(inH * 3600 + inM * 60 + inS);
-					return acc + Math.max(0, diff / 3600); // hours, never negative
-				}, 0);
-
-				const targetHours = student.target_hours;
-				const remainingHours = Math.max(0, targetHours - totalRenderedHours);
-				const progressPct = Math.min(100, (totalRenderedHours / targetHours) * 100);
-
-				// ── 3. Recent schedules (last 7 entries) ──────────────────────
-				const recentSchedules = completedSchedules.slice(0, 7);
-
 				// ── 4. Today's schedule entry (if any) ────────────────────────
-				const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+				const today = new Date().toISOString().split("T")[0];
 				const todaySchedule = await Schedule.findOne({
 					where: { ccc_id, date: today },
 				});
 
 				// ── 5. Latest activity records ────────────────────────────────
-				// Activity records use schedule_record_date = YYYYMMDD + ccc_id.
-				// Build a prefix from today and the student's ccc_id for a quick
-				// LIKE query; for full history we do a partial match on ccc_id.
 				const recentActivities = await ActivityRecord.findAll({
 					where: {
-						schedule_record_date: {
-							[Op.like]: `%${ccc_id}`,
-						},
+						schedule_record_date: { [Op.like]: `%${ccc_id}` },
 					},
 					order: [["createdAt", "DESC"]],
 					limit: 5,
@@ -111,9 +101,7 @@ class DashboardRouter {
 				// ── 6. Latest summary ─────────────────────────────────────────
 				const latestSummary = await Summary.findOne({
 					where: {
-						schedule_record_date: {
-							[Op.like]: `%${ccc_id}`,
-						},
+						schedule_record_date: { [Op.like]: `%${ccc_id}` },
 					},
 					order: [["createdAt", "DESC"]],
 				});
@@ -127,13 +115,14 @@ class DashboardRouter {
 
 				return res.status(200).json({
 					success: true,
-					student,
+					student: studentWithProgress,
 					ojt_progress: {
-						target_hours: targetHours,
-						total_rendered_hours: parseFloat(totalRenderedHours.toFixed(2)),
-						remaining_hours: parseFloat(remainingHours.toFixed(2)),
-						progress_percentage: parseFloat(progressPct.toFixed(2)),
-						total_days: completedSchedules.length,
+						target_hours: student.target_hours,
+						total_rendered_hours: studentWithProgress.completed_hours,
+						remaining_hours: studentWithProgress.remaining_hours,
+						progress_percentage: parseFloat(((studentWithProgress.progress ?? 0) * 100).toFixed(2)),
+						total_days: studentWithProgress.total_schedules,
+						is_done: studentWithProgress.is_done,
 					},
 					today_schedule: todaySchedule,
 					recent_schedules: recentSchedules,
@@ -149,8 +138,6 @@ class DashboardRouter {
 
 		// ─────────────────────────────────────────────────────────────────────
 		// OFFICE / SUPERVISOR DASHBOARD  GET /dashboard/office/:office_id
-		// Returns office info, supervised students' OJT stats, today's
-		// attendance snapshot, pending time-in/out flags, and recent logs.
 		// ─────────────────────────────────────────────────────────────────────
 		this.router.get("/office/:office_id", async (req, res) => {
 			try {
@@ -192,44 +179,21 @@ class DashboardRouter {
 					],
 				});
 
-				// Index today's entries by ccc_id for easy merging.
 				const todayMap = {};
 				for (const entry of todaySchedules) {
 					todayMap[entry.ccc_id] = entry;
 				}
 
-				// ── 4. OJT progress per student ───────────────────────────────
-				const allCompleted = await Schedule.findAll({
-					where: {
-						ccc_id: { [Op.in]: ccc_ids },
-						time_out: { [Op.ne]: null },
-					},
-					attributes: ["ccc_id", "time_in", "time_out"],
-				});
+				// ── 4. OJT progress per student via attachProgress ────────────
+				// Mirrors get-all-users supervisor path exactly.
+				// attachProgress scopes each student's schedules to their own
+				// current_sy so previous-year records are excluded.
+				const studentsWithProgress = await attachProgress(students);
 
-				// Accumulate hours per student.
-				const hoursMap = {};
-				for (const s of allCompleted) {
-					if (!hoursMap[s.ccc_id]) hoursMap[s.ccc_id] = 0;
-					const [inH, inM, inS] = s.time_in.split(":").map(Number);
-					const [outH, outM, outS] = s.time_out.split(":").map(Number);
-					const diff =
-						(outH * 3600 + outM * 60 + outS) -
-						(inH * 3600 + inM * 60 + inS);
-					hoursMap[s.ccc_id] += Math.max(0, diff / 3600);
-				}
-
-				const studentSummaries = students.map((s) => {
-					const rendered = parseFloat((hoursMap[s.ccc_id] ?? 0).toFixed(2));
-					const remaining = parseFloat(Math.max(0, s.target_hours - rendered).toFixed(2));
-					return {
-						...s.toJSON(),
-						today_schedule: todayMap[s.ccc_id] ?? null,
-						total_rendered_hours: rendered,
-						remaining_hours: remaining,
-						progress_percentage: parseFloat(Math.min(100, (rendered / s.target_hours) * 100).toFixed(2)),
-					};
-				});
+				const studentSummaries = studentsWithProgress.map((s) => ({
+					...s,
+					today_schedule: todayMap[s.ccc_id] ?? null,
+				}));
 
 				// ── 5. Attendance counts for today ────────────────────────────
 				const presentToday = todaySchedules.length;
@@ -251,9 +215,7 @@ class DashboardRouter {
 
 				// ── 8. Recent office-wide logs ────────────────────────────────
 				const recentLogs = await Log.findAll({
-					where: {
-						user_ccc_id: { [Op.in]: ccc_ids },
-					},
+					where: { user_ccc_id: { [Op.in]: ccc_ids } },
 					order: [["createdAt", "DESC"]],
 					limit: 20,
 				});
@@ -281,8 +243,6 @@ class DashboardRouter {
 
 		// ─────────────────────────────────────────────────────────────────────
 		// SUPER ADMIN DASHBOARD  GET /dashboard/superadmin
-		// Returns platform-wide statistics: offices, users, OJT progress
-		// aggregates, school year statuses, special key count, and audit logs.
 		// ─────────────────────────────────────────────────────────────────────
 		this.router.get("/superadmin", async (req, res) => {
 			try {
@@ -320,7 +280,6 @@ class DashboardRouter {
 				]);
 
 				// ── 3. Platform-wide OJT progress ────────────────────────────
-				// One aggregated query: sum of schedule count and student targets.
 				const completedScheduleCount = await Schedule.count({
 					where: { time_out: { [Op.ne]: null } },
 				});
@@ -358,7 +317,7 @@ class DashboardRouter {
 					limit: 20,
 				});
 
-				// ── 8. Per-office student counts (useful for admin table) ─────
+				// ── 8. Per-office student counts ──────────────────────────────
 				const perOfficeStats = await User.findAll({
 					where: { role: "student", status: "active" },
 					attributes: [
@@ -369,7 +328,7 @@ class DashboardRouter {
 					raw: true,
 				});
 
-				console.log({
+				const payload = {
 					offices: {
 						total: totalOffices,
 						active: activeOffices,
@@ -400,41 +359,10 @@ class DashboardRouter {
 					},
 					per_office_stats: perOfficeStats,
 					recent_super_admin_logs: recentSuperAdminLogs,
-				})
+				};
 
-				return res.status(200).json({
-					success: true,
-					offices: {
-						total: totalOffices,
-						active: activeOffices,
-						deactivated: deactivatedOffices,
-						list: officeList,
-					},
-					users: {
-						total: totalUsers,
-						active_students: activeStudents,
-						active_supervisors: activeSupervisors,
-						pending_deletion: pendingDeletion,
-						soft_deleted: softDeleted,
-					},
-					ojt_platform: {
-						completed_schedule_entries: completedScheduleCount,
-						total_target_hours: parseInt(targetHoursAgg[0]?.total_target_hours ?? 0),
-						total_student_count: parseInt(targetHoursAgg[0]?.student_count ?? 0),
-					},
-					attendance_today: {
-						timed_in: todayTotal,
-						timed_out: todayTimedOut,
-						wfh: todayWFH,
-					},
-					school_years: schoolYears,
-					special_keys: {
-						active: activeKeys,
-						expired: expiredKeys,
-					},
-					per_office_stats: perOfficeStats,
-					recent_super_admin_logs: recentSuperAdminLogs,
-				});
+				console.log(payload);
+				return res.status(200).json({ success: true, ...payload });
 			} catch (error) {
 				console.error("Super admin dashboard error:", error);
 				return res.status(500).json({ message: "Internal server error.", error: error.message });

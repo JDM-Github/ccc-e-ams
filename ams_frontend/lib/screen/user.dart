@@ -140,31 +140,28 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
       current_sy: user['current_sy'] ?? false,
       createdAt: DateTime.now(),
     );
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      barrierColor: Colors.black87,
-      builder: (_) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(16),
-        child: EditMemberDialog(
-          member: member,
-          onConfirm: (m) async {
-            AppSnackBar.loading(context, 'Updating profile…', id: 'edit-profile');
-            try {
-              final nav = Navigator.of(context).context;
-              Navigator.pop(context);
-              await _loginStore.editUser(m);
-              await _loadData();
-              if (!mounted) return;
-              AppSnackBar.hide(nav, id: 'edit-profile');
-              AppSnackBar.success(nav, 'Profile updated successfully.', id: 'edit-profile-success');
-            } catch (_) {
-              if (!mounted) return;
-              AppSnackBar.hide(context, id: 'edit-profile');
-              AppSnackBar.error(context, 'Failed to update profile.', id: 'edit-profile-error');
-            }
-          },
-        ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => EditMemberDialog(
+        member: member,
+        onConfirm: (m) async {
+          AppSnackBar.loading(context, 'Updating profile…', id: 'edit-profile');
+          try {
+            final nav = Navigator.of(context).context;
+            Navigator.pop(context);
+            await _loginStore.editUser(m);
+            await _loadData();
+            if (!mounted) return;
+            AppSnackBar.hide(nav, id: 'edit-profile');
+            AppSnackBar.success(nav, 'Profile updated successfully.', id: 'edit-profile-success');
+          } catch (_) {
+            if (!mounted) return;
+            AppSnackBar.hide(context, id: 'edit-profile');
+            AppSnackBar.error(context, 'Failed to update profile.', id: 'edit-profile-error');
+          }
+        },
       ),
     );
   }

@@ -24,7 +24,6 @@ class _Members extends State<MembersPage> {
   String? selectedRole;
   String? selectedProgress;
 
-  // Semantic colors — not mode-dependent
   static const _teal = Color(0xFF0F766E);
   static const _violet = Color(0xFF7C3AED);
   static const _success = Color(0xFF16A34A);
@@ -111,6 +110,7 @@ class _Members extends State<MembersPage> {
         if (m.role == 'supervisor') return 1;
         return 2;
       }
+
       return order(a).compareTo(order(b));
     });
     return filtered;
@@ -148,43 +148,12 @@ class _Members extends State<MembersPage> {
 
     return Scaffold(
       backgroundColor: ThemeManager.scaffold(context),
-      floatingActionButton: isLandscape
-          ? null
-          : isUserSupervisor
-          ? Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                if (activeSY) ...[
-                  FloatingActionButton.extended(
-                    heroTag: 'addSupervisor',
-                    onPressed: _showAddSupervisorSheet,
-                    backgroundColor: _teal,
-                    foregroundColor: Colors.white,
-                    icon: const Icon(Icons.admin_panel_settings_rounded),
-                    label: const Text(''),
-                    elevation: 2,
-                  ),
-                  const SizedBox(height: 10),
-                ],
-                if (activeSY)
-                  FloatingActionButton.extended(
-                    heroTag: 'addMember',
-                    onPressed: _showAddStudentSheet,
-                    backgroundColor: ThemeManager.brand,
-                    foregroundColor: Colors.white,
-                    icon: const Icon(Icons.person_add_rounded),
-                    label: const Text(''),
-                    elevation: 2,
-                  ),
-              ],
-            )
-          : null,
+      // FAB removed — add buttons live in the mobile filter bar now
       body: Column(
         children: [
           isLandscape
               ? _buildPcTopBar(isFirstLoad, isUserSupervisor, isUserAdmin, activeSY, isDark)
-              : _buildMobileFilterBar(isFirstLoad, isUserSupervisor, isDark),
+              : _buildMobileFilterBar(isFirstLoad, isUserSupervisor, activeSY, isDark),
           if (myIsPendingDelete) _buildMyStatusBanner(context),
           _buildOfflineBanner(context, isDark),
           if (!isLandscape) _buildMemberCountRow(context, displayMembers),
@@ -231,7 +200,6 @@ class _Members extends State<MembersPage> {
       ),
       child: Row(
         children: [
-          // Search
           SizedBox(
             width: 220,
             height: 34,
@@ -256,7 +224,6 @@ class _Members extends State<MembersPage> {
             ),
           ),
           const SizedBox(width: 12),
-
           _pcFilterChip(context, 'All', selectedRole == null, () => setState(() => selectedRole = null)),
           const SizedBox(width: 4),
           _pcFilterChip(
@@ -267,24 +234,19 @@ class _Members extends State<MembersPage> {
           ),
           const SizedBox(width: 4),
           _pcFilterChip(context, 'Student', selectedRole == 'Student', () => setState(() => selectedRole = 'Student')),
-
           Container(
             width: 1,
             height: 20,
             color: ThemeManager.dividerColor(context),
             margin: const EdgeInsets.symmetric(horizontal: 10),
           ),
-
           const Spacer(),
-
           if (_membersStore.lastFetched != null)
             Text(
               'Synced ${_formatLastFetched(_membersStore.lastFetched!)}',
               style: GoogleFonts.dmSans(fontSize: 11, color: ThemeManager.muted(context)),
             ),
           const SizedBox(width: 10),
-
-          // Refresh
           SizedBox(
             height: 34,
             width: 34,
@@ -304,7 +266,6 @@ class _Members extends State<MembersPage> {
                   : Icon(Icons.refresh_rounded, size: 16, color: ThemeManager.secondary(context)),
             ),
           ),
-
           if (activeSY && isUserSupervisor) ...[
             const SizedBox(width: 8),
             SizedBox(
@@ -368,115 +329,223 @@ class _Members extends State<MembersPage> {
   }
 
   // ── Mobile filter bar ──────────────────────────────────────────────────────
+  //
+  // Layout (compact, 2 rows total):
+  //
+  //  Row 1: [search field]  [refresh]  [+ Supervisor]  [+ Member]
+  //  Row 2: role chips ··· | progress chips ···  (single scrollable row)
+  //
+  // Last-synced timestamp moves into the search field as a suffix hint so it
+  // doesn't eat its own row.
 
-  Widget _buildMobileFilterBar(bool isFirstLoad, bool isUserSupervisor, bool isDark) {
+  Widget _buildMobileFilterBar(bool isFirstLoad, bool isUserSupervisor, bool activeSY, bool isDark) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       decoration: BoxDecoration(
         color: ThemeManager.surfaceElevated(context),
         boxShadow: isDark ? null : [const BoxShadow(color: Color(0x0A000000), blurRadius: 4, offset: Offset(0, 2))],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
+          // ── Row 1: search + actions ──────────────────────────
           Row(
             children: [
+              // Search field — takes remaining space
               Expanded(child: _buildSearchField(context)),
-              const SizedBox(width: 8),
-              _buildRefreshButton(context, isFirstLoad),
+              const SizedBox(width: 6),
+
+              // Refresh
+              _buildCompactIconButton(
+                context,
+                tooltip: 'Refresh',
+                color: ThemeManager.inputFillColor(context),
+                borderColor: ThemeManager.border(context),
+                child: _membersStore.isLoading && !isFirstLoad
+                    ? SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(ThemeManager.blue(context)),
+                        ),
+                      )
+                    : Icon(Icons.refresh_rounded, size: 17, color: ThemeManager.secondary(context)),
+                onTap: _loadMembers,
+              ),
+
+              // Add buttons — only visible for supervisors on active SY
+              if (activeSY && isUserSupervisor) ...[
+                const SizedBox(width: 6),
+                _buildCompactIconButton(
+                  context,
+                  tooltip: 'Add Supervisor',
+                  color: _teal.withOpacity(0.10),
+                  borderColor: _teal.withOpacity(0.30),
+                  child: const Icon(Icons.admin_panel_settings_rounded, size: 17, color: _teal),
+                  onTap: _showAddSupervisorSheet,
+                ),
+                const SizedBox(width: 6),
+                _buildCompactIconButton(
+                  context,
+                  tooltip: 'Add Member',
+                  color: ThemeManager.brand.withOpacity(0.10),
+                  borderColor: ThemeManager.brand.withOpacity(0.30),
+                  child: Icon(Icons.person_add_rounded, size: 17, color: ThemeManager.brand),
+                  onTap: _showAddStudentSheet,
+                ),
+              ],
             ],
           ),
+
+          const SizedBox(height: 8),
+
+          // ── Row 2: all chips in one scrollable row ────────────
+          SizedBox(
+            height: 26,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                // Role chips
+                _mobileChip(context, 'All', selectedRole == null, () => setState(() => selectedRole = null)),
+                const SizedBox(width: 4),
+                if (!isUserSupervisor) ...[
+                  _mobileChip(
+                    context,
+                    'Supervisor',
+                    selectedRole == 'Supervisor',
+                    () => setState(() => selectedRole = 'Supervisor'),
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                _mobileChip(
+                  context,
+                  'Student',
+                  selectedRole == 'Student',
+                  () => setState(() => selectedRole = 'Student'),
+                ),
+
+                // Divider between chip groups
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: VerticalDivider(width: 1, thickness: 1, color: ThemeManager.dividerColor(context)),
+                ),
+
+                // Progress chips
+                _mobileChip(
+                  context,
+                  'All Progress',
+                  selectedProgress == null,
+                  () => setState(() => selectedProgress = null),
+                ),
+                const SizedBox(width: 4),
+                _mobileChip(
+                  context,
+                  'Completed',
+                  selectedProgress == 'done',
+                  () => setState(() => selectedProgress = 'done'),
+                  color: _success,
+                  icon: Icons.check_circle_rounded,
+                ),
+                const SizedBox(width: 4),
+                _mobileChip(
+                  context,
+                  'In Progress',
+                  selectedProgress == 'ongoing',
+                  () => setState(() => selectedProgress = 'ongoing'),
+                  color: _warning,
+                  icon: Icons.timelapse_rounded,
+                ),
+              ],
+            ),
+          ),
+
+          // Last synced — single line below chips, very subtle
           if (_membersStore.lastFetched != null)
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Align(
                 alignment: Alignment.centerRight,
                 child: Text(
-                  'Last synced: ${_formatLastFetched(_membersStore.lastFetched!)}',
+                  'Synced ${_formatLastFetched(_membersStore.lastFetched!)}',
                   style: GoogleFonts.dmSans(fontSize: 10, color: ThemeManager.muted(context)),
                 ),
               ),
             ),
-          const SizedBox(height: 8),
-          _buildChipRow(context, [
-            _ChipData('All', selectedRole == null, () => setState(() => selectedRole = null)),
-            if (!isUserSupervisor)
-              _ChipData('Supervisor', selectedRole == 'Supervisor', () => setState(() => selectedRole = 'Supervisor')),
-            _ChipData('Student', selectedRole == 'Student', () => setState(() => selectedRole = 'Student')),
-          ]),
-          const SizedBox(height: 6),
-          _buildChipRow(context, [
-            _ChipData('All Progress', selectedProgress == null, () => setState(() => selectedProgress = null)),
-            _ChipData(
-              'Completed',
-              selectedProgress == 'done',
-              () => setState(() => selectedProgress = 'done'),
-              color: _success,
-              icon: Icons.check_circle_rounded,
-            ),
-            _ChipData(
-              'In Progress',
-              selectedProgress == 'ongoing',
-              () => setState(() => selectedProgress = 'ongoing'),
-              color: _warning,
-              icon: Icons.timelapse_rounded,
-            ),
-          ]),
         ],
       ),
     );
   }
 
-  Widget _buildChipRow(BuildContext context, List<_ChipData> chips) {
-    return SizedBox(
-      height: 28,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        children: chips.map((chip) {
-          final activeColor = chip.color ?? ThemeManager.brand;
-          return Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: GestureDetector(
-              onTap: chip.onTap,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: chip.isSelected ? activeColor : ThemeManager.inputFillColor(context),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: chip.isSelected ? activeColor : ThemeManager.border(context)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (chip.icon != null) ...[
-                      Icon(
-                        chip.icon,
-                        size: 10,
-                        color: chip.isSelected ? Colors.white : ThemeManager.secondary(context),
-                      ),
-                      const SizedBox(width: 4),
-                    ],
-                    Text(
-                      chip.label,
-                      style: GoogleFonts.dmSans(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: chip.isSelected ? Colors.white : ThemeManager.secondary(context),
-                      ),
-                    ),
-                  ],
-                ),
+  /// Compact 34×34 tappable icon button used in the mobile action row.
+  Widget _buildCompactIconButton(
+    BuildContext context, {
+    required Widget child,
+    required Color color,
+    required Color borderColor,
+    required VoidCallback onTap,
+    String? tooltip,
+  }) {
+    final btn = GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: borderColor),
+        ),
+        alignment: Alignment.center,
+        child: child,
+      ),
+    );
+    return tooltip != null ? Tooltip(message: tooltip, child: btn) : btn;
+  }
+
+  Widget _mobileChip(
+    BuildContext context,
+    String label,
+    bool isSelected,
+    VoidCallback onTap, {
+    Color? color,
+    IconData? icon,
+  }) {
+    final activeColor = color ?? ThemeManager.brand;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? activeColor : ThemeManager.inputFillColor(context),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: isSelected ? activeColor : ThemeManager.border(context)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 10, color: isSelected ? Colors.white : ThemeManager.secondary(context)),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: GoogleFonts.dmSans(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: isSelected ? Colors.white : ThemeManager.secondary(context),
               ),
             ),
-          );
-        }).toList(),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildSearchField(BuildContext context) {
     return Container(
-      height: 36,
+      height: 34,
       decoration: BoxDecoration(
         color: ThemeManager.inputFillColor(context),
         borderRadius: BorderRadius.circular(8),
@@ -485,34 +554,15 @@ class _Members extends State<MembersPage> {
       child: TextField(
         style: GoogleFonts.dmSans(fontSize: 13, color: ThemeManager.primary(context)),
         decoration: InputDecoration(
-          prefixIcon: Icon(Icons.search_rounded, color: ThemeManager.muted(context), size: 18),
-          hintText: 'Search members',
+          prefixIcon: Icon(Icons.search_rounded, color: ThemeManager.muted(context), size: 17),
+          hintText: 'Search members…',
           hintStyle: GoogleFonts.dmSans(color: ThemeManager.hint(context), fontSize: 13),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           isDense: true,
         ),
         onChanged: (val) => setState(() => searchQuery = val),
       ),
-    );
-  }
-
-  Widget _buildRefreshButton(BuildContext context, bool isFirstLoad) {
-    return Container(
-      height: 36,
-      width: 36,
-      decoration: BoxDecoration(color: ThemeManager.brand, borderRadius: BorderRadius.circular(8)),
-      child: _membersStore.isLoading && !isFirstLoad
-          ? const Padding(
-              padding: EdgeInsets.all(10),
-              child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
-            )
-          : IconButton(
-              icon: const Icon(Icons.refresh_rounded, size: 18),
-              color: Colors.white,
-              padding: EdgeInsets.zero,
-              onPressed: _loadMembers,
-            ),
     );
   }
 
@@ -684,30 +734,22 @@ class _Members extends State<MembersPage> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Left accent stripe
                 Container(width: 4, color: accentColor),
-
-                // Card content
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ── Main row ──────────────────────────────────────
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            // Avatar
                             _buildMemberAvatar(member, accentColor),
                             const SizedBox(width: 12),
-
-                            // Info
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  // Name + role badge
                                   Row(
                                     crossAxisAlignment: CrossAxisAlignment.center,
                                     children: [
@@ -728,8 +770,6 @@ class _Members extends State<MembersPage> {
                                     ],
                                   ),
                                   const SizedBox(height: 5),
-
-                                  // ID + schedules row
                                   Row(
                                     children: [
                                       Icon(Icons.badge_outlined, size: 11, color: ThemeManager.muted(context)),
@@ -766,8 +806,6 @@ class _Members extends State<MembersPage> {
                                       ],
                                     ],
                                   ),
-
-                                  // Course (students only)
                                   if (isStudent && member.course != null) ...[
                                     const SizedBox(height: 3),
                                     Row(
@@ -788,13 +826,10 @@ class _Members extends State<MembersPage> {
                                 ],
                               ),
                             ),
-
                             const SizedBox(width: 4),
                             Icon(Icons.chevron_right_rounded, color: ThemeManager.faint(context), size: 18),
                           ],
                         ),
-
-                        // ── Progress section (students only) ──────────────
                         if (isStudent) ...[
                           const SizedBox(height: 10),
                           Divider(height: 1, color: ThemeManager.dividerColor(context)),
@@ -831,7 +866,7 @@ class _Members extends State<MembersPage> {
                               const SizedBox(width: 5),
                               Text(
                                 '· ${member.hoursLabel}',
-                                style: GoogleFonts.dmSans(fontSize: 10, color: ThemeManager.muted(context)),
+                                style: GoogleFonts.dmSans(fontSize: 11, color: ThemeManager.muted(context)),
                               ),
                             ],
                           ),
@@ -904,13 +939,4 @@ class _Members extends State<MembersPage> {
       ),
     );
   }
-}
-
-class _ChipData {
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-  final Color? color;
-  final IconData? icon;
-  const _ChipData(this.label, this.isSelected, this.onTap, {this.color, this.icon});
 }

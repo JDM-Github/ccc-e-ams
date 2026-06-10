@@ -4,8 +4,6 @@ import 'package:ccc_ojt_schedule/store/login_store.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:ccc_ojt_schedule/store/schedule_store.dart';
-import 'package:ccc_ojt_schedule/components/schedule/schedule_record.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -14,10 +12,8 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage>
-    with TickerProviderStateMixin {
+class _DashboardPageState extends State<DashboardPage> with TickerProviderStateMixin {
   final LoginStore _loginStore = LoginStore();
-  final ScheduleStore _scheduleStore = ScheduleStore();
 
   Map<String, dynamic>? _data;
   bool _loading = true;
@@ -29,28 +25,25 @@ class _DashboardPageState extends State<DashboardPage>
 
   static const int _maxCards = 8;
 
-  bool get _isSupervisor =>
-      _loginStore.user.value['role'] == 'supervisor';
+  bool get _isSupervisor => _loginStore.user.value['role'] == 'supervisor';
 
   @override
   void initState() {
     super.initState();
     _staggerCtrl = List.generate(
       _maxCards,
-      (_) => AnimationController(
-          vsync: this, duration: const Duration(milliseconds: 340)),
+      (_) => AnimationController(vsync: this, duration: const Duration(milliseconds: 340)),
     );
     _fadeAnims = _staggerCtrl
-        .map((c) =>
-            CurvedAnimation(parent: c, curve: Curves.easeOut)
-                as Animation<double>)
+        .map((c) => CurvedAnimation(parent: c, curve: Curves.easeOut) as Animation<double>)
         .toList();
     _slideAnims = _staggerCtrl
-        .map((c) =>
-            Tween<Offset>(
-                    begin: const Offset(0, 0.07), end: Offset.zero)
-                .animate(CurvedAnimation(
-                    parent: c, curve: Curves.easeOutCubic)))
+        .map(
+          (c) => Tween<Offset>(
+            begin: const Offset(0, 0.07),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(parent: c, curve: Curves.easeOutCubic)),
+        )
         .toList();
 
     _load();
@@ -93,10 +86,7 @@ class _DashboardPageState extends State<DashboardPage>
         result = await RequestHandler().handleRequest('dashboard/office/$officeId', method: 'GET');
       } else {
         final cccId = user['ccc_id'] as String;
-        await Future.wait([
-          RequestHandler().handleRequest('dashboard/student/$cccId', method: 'GET').then((r) => result = r),
-          _scheduleStore.loadFromLocal().then((_) => _scheduleStore.fetchSchedules(cccId)),
-        ]);
+        result = await RequestHandler().handleRequest('dashboard/student/$cccId', method: 'GET');
       }
 
       if (mounted) {
@@ -119,66 +109,29 @@ class _DashboardPageState extends State<DashboardPage>
     final i = index.clamp(0, _maxCards - 1);
     return FadeTransition(
       opacity: _fadeAnims[i],
-      child:
-          SlideTransition(position: _slideAnims[i], child: child),
+      child: SlideTransition(position: _slideAnims[i], child: child),
     );
   }
-  
-  TimeOfDay _effectiveTimeIn(ScheduleRecord r) {
-    if (ScheduleRecord.isEarly(r.timeIn) && !r.isAcceptedEarly) {
-      return const TimeOfDay(hour: 8, minute: 0);
-    }
-    return r.timeIn;
-  }
-
-  bool _isPast(DateTime date) {
-    final today = DateTime.now();
-    return DateTime(date.year, date.month, date.day).isBefore(DateTime(today.year, today.month, today.day));
-  }
-
-  double _calcHours(TimeOfDay i, TimeOfDay o) {
-    final inM = i.hour * 60 + i.minute;
-    final outM = o.hour * 60 + o.minute;
-    if (outM <= inM) return 0;
-    int total = outM - inM;
-    const ls = 12 * 60, le = 13 * 60;
-    if (outM > ls && inM < le) {
-      total -= ((outM < le ? outM : le) - (inM > ls ? inM : ls));
-    }
-    return total / 60.0;
-  }
-
-  double get _completedHours => _scheduleStore.schedules.fold(0.0, (sum, r) {
-    if (r.isInOffice && !r.isAcceptedWorkFromHome) return sum;
-    final tIn = _effectiveTimeIn(r);
-    final tOut = r.timeOut ?? (_isPast(r.date) ? const TimeOfDay(hour: 17, minute: 0) : null);
-    return tOut != null ? sum + _calcHours(tIn, tOut) : sum;
-  });
-  int get _totalDays => _scheduleStore.schedules.where((r) => !(r.isInOffice && !r.isAcceptedWorkFromHome)).length;
 
   @override
   Widget build(BuildContext context) {
     final isDark = ThemeManager.isDark(context);
-    final isLandscape =
-        MediaQuery.of(context).size.width >
-            MediaQuery.of(context).size.height;
+    final isLandscape = MediaQuery.of(context).size.width > MediaQuery.of(context).size.height;
 
     return Scaffold(
       backgroundColor: ThemeManager.scaffold(context),
       body: _loading
-          ? Center(
-              child: CircularProgressIndicator(
-                  color: ThemeManager.blue(context)))
+          ? Center(child: CircularProgressIndicator(color: ThemeManager.blue(context)))
           : (_error != null || _data == null)
-              ? _buildError(isDark)
-              : RefreshIndicator(
-                  onRefresh: _refresh,
-                  color: Colors.white,
-                  backgroundColor: const Color(0xFF1B3769),
-                  child: _isSupervisor
-                      ? _buildSupervisorDashboard(isDark, isLandscape)
-                      : _buildStudentDashboard(isDark, isLandscape),
-                ),
+          ? _buildError(isDark)
+          : RefreshIndicator(
+              onRefresh: _refresh,
+              color: Colors.white,
+              backgroundColor: const Color(0xFF1B3769),
+              child: _isSupervisor
+                  ? _buildSupervisorDashboard(isDark, isLandscape)
+                  : _buildStudentDashboard(isDark, isLandscape),
+            ),
     );
   }
 
@@ -192,41 +145,31 @@ class _DashboardPageState extends State<DashboardPage>
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: const Color(0xFF1B3769)
-                  .withOpacity(isDark ? 0.12 : 0.06),
+              color: const Color(0xFF1B3769).withOpacity(isDark ? 0.12 : 0.06),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.wifi_off_rounded,
-                size: 38, color: ThemeManager.muted(context)),
+            child: Icon(Icons.wifi_off_rounded, size: 38, color: ThemeManager.muted(context)),
           ),
           const SizedBox(height: 14),
           Text(
             'Failed to load dashboard',
             style: GoogleFonts.dmSans(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: ThemeManager.secondary(context)),
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: ThemeManager.secondary(context),
+            ),
           ),
           const SizedBox(height: 6),
-          Text(_error ?? '',
-              style: GoogleFonts.dmSans(
-                  fontSize: 11,
-                  color: ThemeManager.muted(context))),
+          Text(_error ?? '', style: GoogleFonts.dmSans(fontSize: 11, color: ThemeManager.muted(context))),
           const SizedBox(height: 18),
           OutlinedButton.icon(
             onPressed: _refresh,
             icon: const Icon(Icons.refresh_rounded, size: 15),
-            label: Text('Retry',
-                style: GoogleFonts.dmSans(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600)),
+            label: Text('Retry', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600)),
             style: OutlinedButton.styleFrom(
               foregroundColor: ThemeManager.blue(context),
-              side: BorderSide(
-                  color:
-                      ThemeManager.blue(context).withOpacity(0.4)),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+              side: BorderSide(color: ThemeManager.blue(context).withOpacity(0.4)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
           ),
         ],
@@ -240,34 +183,25 @@ class _DashboardPageState extends State<DashboardPage>
 
   Widget _buildStudentDashboard(bool isDark, bool isLandscape) {
     final d = _data!;
+
+    // ── Pull server-computed progress values directly from ojt_progress ──
     final ojt = d['ojt_progress'] as Map? ?? {};
     final student = d['student'] as Map? ?? {};
     final todaySched = d['today_schedule'] as Map?;
     final recentActivities = (d['recent_activities'] as List?)?.cast<Map>() ?? [];
 
-    final targetHours =
-        (ojt['target_hours'] as num?)?.toDouble() ?? (_loginStore.user.value['target_hours'] as num?)?.toDouble() ?? 0;
+    // Server owns these numbers — no local recomputation
+    final targetHours = (ojt['target_hours'] as num?)?.toDouble() ?? 0;
+    final rendered = (ojt['total_rendered_hours'] as num?)?.toDouble() ?? 0;
+    final remaining = (ojt['remaining_hours'] as num?)?.toDouble() ?? 0;
+    final progress = (ojt['progress_percentage'] as num?)?.toDouble() ?? 0;
+    final totalDays = (ojt['total_days'] as num?)?.toInt() ?? 0;
+    final isDone = ojt['is_done'] as bool? ?? false;
 
-    // ── Use ScheduleStore — identical to UserPage ──────────────────────────
-    final rendered = _completedHours;
-    final totalDays = _totalDays;
-    final remaining = (targetHours - rendered).clamp(0.0, double.infinity);
-    final progress = targetHours > 0 ? ((rendered / targetHours) * 100).clamp(0.0, 100.0) : 0.0;
-    final isDone = rendered >= targetHours && targetHours > 0;
-    final recentSchedules = _scheduleStore.schedules
-        .take(5)
-        .map(
-          (r) => {
-            'date': r.date.toIso8601String(),
-            'time_in': '${r.timeIn.hour.toString().padLeft(2, '0')}:${r.timeIn.minute.toString().padLeft(2, '0')}:00',
-            'time_out': r.timeOut != null
-                ? '${r.timeOut!.hour.toString().padLeft(2, '0')}:${r.timeOut!.minute.toString().padLeft(2, '0')}:00'
-                : null,
-            'isWorkFromHome': r.isAcceptedWorkFromHome && !r.isInOffice,
-            'isAcceptedEarly': r.isAcceptedEarly,
-          },
-        )
-        .toList();
+    // ── recent_schedules comes straight from the server ───────────────────
+    // Shape: { date, time_in, time_out, isWorkFromHome,
+    //          isAcceptedWorkFromHome, isAcceptedEarly }
+    final recentSchedules = (d['recent_schedules'] as List?)?.cast<Map>() ?? [];
 
     final firstName = student['first_name'] as String? ?? '';
     final now = DateTime.now();
@@ -338,13 +272,14 @@ class _DashboardPageState extends State<DashboardPage>
               flex: 5,
               child: Column(
                 children: [
-                  _animated(
-                      1,
-                      _progressCard(targetHours, rendered,
-                          remaining, progress, isDone, isDark)),
                   const SizedBox(height: 12),
-                  _animated(3,
-                      _recentSchedulesCard(recentSchedules, isDark)),
+                  _buildMissionCard(context),
+                  const SizedBox(height: 12),
+                  _buildVisionCard(context),
+                  const SizedBox(height: 12),
+                  _animated(1, _progressCard(targetHours, rendered, remaining, progress, isDone, isDark)),
+                  const SizedBox(height: 12),
+                  _animated(3, _recentSchedulesCard(recentSchedules, isDark)),
                 ],
               ),
             ),
@@ -355,12 +290,10 @@ class _DashboardPageState extends State<DashboardPage>
                 children: [
                   _animated(2, _todayCard(todaySched, isDark)),
                   const SizedBox(height: 12),
-                  _animated(4,
-                      _statsRow(totalDays, rendered, isDone, isDark)),
+                  _animated(4, _statsRow(totalDays, rendered, isDone, isDark)),
                   if (recentActivities.isNotEmpty) ...[
                     const SizedBox(height: 12),
-                    _animated(5,
-                        _activitiesCard(recentActivities, isDark)),
+                    _animated(5, _activitiesCard(recentActivities, isDark)),
                   ],
                 ],
               ),
@@ -389,12 +322,14 @@ class _DashboardPageState extends State<DashboardPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const SizedBox(height: 12),
         _animated(0, _greetingBanner(greeting, firstName, isDark)),
         const SizedBox(height: 12),
-        _animated(
-            1,
-            _progressCard(targetHours, rendered, remaining, progress,
-                isDone, isDark)),
+        _animated(1, _progressCard(targetHours, rendered, remaining, progress, isDone, isDark)),
+        const SizedBox(height: 12),
+        _buildMissionCard(context),
+        const SizedBox(height: 12),
+        _buildVisionCard(context),
         const SizedBox(height: 10),
         _animated(2, _todayCard(todaySched, isDark)),
         const SizedBox(height: 10),
@@ -412,13 +347,11 @@ class _DashboardPageState extends State<DashboardPage>
 
   // ── Greeting banner ───────────────────────────────────────────────────────
 
-  Widget _greetingBanner(
-      String greeting, String firstName, bool isDark) {
+  Widget _greetingBanner(String greeting, String firstName, bool isDark) {
     final now = DateTime.now();
     return Container(
       width: double.infinity,
-      padding:
-          const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
@@ -427,11 +360,7 @@ class _DashboardPageState extends State<DashboardPage>
         ),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
-          BoxShadow(
-              color:
-                  const Color(0xFF1B3769).withOpacity(0.25),
-              blurRadius: 10,
-              offset: const Offset(0, 3)),
+          BoxShadow(color: const Color(0xFF1B3769).withOpacity(0.25), blurRadius: 10, offset: const Offset(0, 3)),
         ],
       ),
       child: Row(
@@ -443,42 +372,36 @@ class _DashboardPageState extends State<DashboardPage>
                 Text(
                   '$greeting,',
                   style: GoogleFonts.dmSans(
-                      fontSize: 13,
-                      color: Colors.white.withOpacity(0.60),
-                      fontWeight: FontWeight.w500),
+                    fontSize: 13,
+                    color: Colors.white.withOpacity(0.60),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   firstName.isNotEmpty ? firstName : 'Student',
-                  style: GoogleFonts.dmSans(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white),
+                  style: GoogleFonts.dmSans(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white),
                 ),
                 const SizedBox(height: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 9, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                        color: Colors.white.withOpacity(0.18)),
+                    border: Border.all(color: Colors.white.withOpacity(0.18)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.calendar_today_rounded,
-                          size: 9,
-                          color: Colors.white.withOpacity(0.70)),
+                      Icon(Icons.calendar_today_rounded, size: 9, color: Colors.white.withOpacity(0.70)),
                       const SizedBox(width: 5),
                       Text(
                         DateFormat('EEEE, MMMM d, yyyy').format(now),
                         style: GoogleFonts.dmSans(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color:
-                                Colors.white.withOpacity(0.85)),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white.withOpacity(0.85),
+                        ),
                       ),
                     ],
                   ),
@@ -491,12 +414,9 @@ class _DashboardPageState extends State<DashboardPage>
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.08),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                  color: Colors.white.withOpacity(0.12)),
+              border: Border.all(color: Colors.white.withOpacity(0.12)),
             ),
-            child: Icon(Icons.school_rounded,
-                size: 28,
-                color: Colors.white.withOpacity(0.70)),
+            child: Icon(Icons.school_rounded, size: 28, color: Colors.white.withOpacity(0.70)),
           ),
         ],
       ),
@@ -505,17 +425,9 @@ class _DashboardPageState extends State<DashboardPage>
 
   // ── Progress card ─────────────────────────────────────────────────────────
 
-  Widget _progressCard(
-    double target,
-    double rendered,
-    double remaining,
-    double progress,
-    bool isDone,
-    bool isDark,
-  ) {
+  Widget _progressCard(double target, double rendered, double remaining, double progress, bool isDone, bool isDark) {
     final pct = (progress / 100).clamp(0.0, 1.0);
-    final progressColor =
-        isDone ? const Color(0xFF10B981) : const Color(0xFF1B3769);
+    final progressColor = isDone ? const Color(0xFF10B981) : const Color(0xFF1B3769);
 
     return _card(
       icon: Icons.timeline_rounded,
@@ -533,34 +445,27 @@ class _DashboardPageState extends State<DashboardPage>
                   Text(
                     '${rendered.toStringAsFixed(1)} hrs',
                     style: GoogleFonts.dmSans(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w800,
-                        color: ThemeManager.primary(context)),
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      color: ThemeManager.primary(context),
+                    ),
                   ),
                   Text(
                     'of ${target.toStringAsFixed(0)} hours',
-                    style: GoogleFonts.dmSans(
-                        fontSize: 12,
-                        color: ThemeManager.secondary(context)),
+                    style: GoogleFonts.dmSans(fontSize: 12, color: ThemeManager.secondary(context)),
                   ),
                 ],
               ),
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color:
-                      progressColor.withOpacity(isDark ? 0.12 : 0.09),
+                  color: progressColor.withOpacity(isDark ? 0.12 : 0.09),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                      color: progressColor.withOpacity(0.25)),
+                  border: Border.all(color: progressColor.withOpacity(0.25)),
                 ),
                 child: Text(
                   '${progress.toStringAsFixed(0)}%',
-                  style: GoogleFonts.dmSans(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: progressColor),
+                  style: GoogleFonts.dmSans(fontSize: 18, fontWeight: FontWeight.w800, color: progressColor),
                 ),
               ),
             ],
@@ -575,8 +480,7 @@ class _DashboardPageState extends State<DashboardPage>
               builder: (_, val, __) => LinearProgressIndicator(
                 value: val,
                 backgroundColor: ThemeManager.dividerColor(context),
-                valueColor:
-                    AlwaysStoppedAnimation<Color>(progressColor),
+                valueColor: AlwaysStoppedAnimation<Color>(progressColor),
                 minHeight: 10,
               ),
             ),
@@ -585,25 +489,18 @@ class _DashboardPageState extends State<DashboardPage>
           Row(
             children: [
               Icon(
-                isDone
-                    ? Icons.check_circle_rounded
-                    : Icons.access_time_rounded,
+                isDone ? Icons.check_circle_rounded : Icons.access_time_rounded,
                 size: 14,
-                color: isDone
-                    ? const Color(0xFF10B981)
-                    : Colors.orange[600],
+                color: isDone ? const Color(0xFF10B981) : Colors.orange[600],
               ),
               const SizedBox(width: 5),
               Text(
-                isDone
-                    ? 'Target hours completed!'
-                    : '${remaining.toStringAsFixed(1)} hours remaining',
+                isDone ? 'Target hours completed!' : '${remaining.toStringAsFixed(1)} hours remaining',
                 style: GoogleFonts.dmSans(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: isDone
-                        ? const Color(0xFF10B981)
-                        : ThemeManager.secondary(context)),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isDone ? const Color(0xFF10B981) : ThemeManager.secondary(context),
+                ),
               ),
             ],
           ),
@@ -615,6 +512,7 @@ class _DashboardPageState extends State<DashboardPage>
   // ── Today card ────────────────────────────────────────────────────────────
 
   Widget _todayCard(Map? sched, bool isDark) {
+    // today_schedule is a raw Schedule row — field names are snake_case
     final hasEntry = sched != null;
     final hasTimeOut = hasEntry && sched['time_out'] != null;
 
@@ -633,32 +531,24 @@ class _DashboardPageState extends State<DashboardPage>
                   const Color(0xFF10B981),
                   isDark,
                 ),
-                Divider(
-                    height: 14,
-                    color: ThemeManager.dividerColor(context)),
+                Divider(height: 14, color: ThemeManager.dividerColor(context)),
                 _timeRow(
                   Icons.logout_rounded,
                   'Time out',
-                  hasTimeOut
-                      ? sched['time_out'] as String
-                      : '--:--',
-                  hasTimeOut
-                      ? const Color(0xFFFF4E0B)
-                      : ThemeManager.muted(context),
+                  hasTimeOut ? sched['time_out'] as String : '--:--',
+                  hasTimeOut ? const Color(0xFFFF4E0B) : ThemeManager.muted(context),
                   isDark,
                 ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    if (sched['isWorkFromHome'] == true)
+                    if (sched['isWorkFromHome'] == true) ...[
                       _badge('WFH', const Color(0xFF2563EB), isDark),
-                    if (sched['isWorkFromHome'] == true)
                       const SizedBox(width: 6),
+                    ],
                     _badge(
                       hasTimeOut ? 'Done' : 'Active',
-                      hasTimeOut
-                          ? const Color(0xFF10B981)
-                          : const Color(0xFF1B3769),
+                      hasTimeOut ? const Color(0xFF10B981) : const Color(0xFF1B3769),
                       isDark,
                     ),
                   ],
@@ -667,14 +557,11 @@ class _DashboardPageState extends State<DashboardPage>
             )
           : Column(
               children: [
-                Icon(Icons.event_busy_rounded,
-                    size: 32, color: ThemeManager.faint(context)),
+                Icon(Icons.event_busy_rounded, size: 32, color: ThemeManager.faint(context)),
                 const SizedBox(height: 8),
                 Text(
                   'No attendance recorded today',
-                  style: GoogleFonts.dmSans(
-                      fontSize: 12,
-                      color: ThemeManager.muted(context)),
+                  style: GoogleFonts.dmSans(fontSize: 12, color: ThemeManager.muted(context)),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -682,26 +569,19 @@ class _DashboardPageState extends State<DashboardPage>
     );
   }
 
-  Widget _timeRow(IconData icon, String label, String time,
-      Color color, bool isDark) {
+  Widget _timeRow(IconData icon, String label, String time, Color color, bool isDark) {
     return Row(
       children: [
         Icon(icon, size: 14, color: color),
         const SizedBox(width: 6),
         Text(
           '$label:',
-          style: GoogleFonts.dmSans(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: ThemeManager.blue(context)),
+          style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w600, color: ThemeManager.blue(context)),
         ),
         const SizedBox(width: 6),
         Text(
           _formatTime(time),
-          style: GoogleFonts.dmSans(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: ThemeManager.primary(context)),
+          style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: ThemeManager.primary(context)),
         ),
       ],
     );
@@ -709,8 +589,7 @@ class _DashboardPageState extends State<DashboardPage>
 
   // ── Quick stats row ───────────────────────────────────────────────────────
 
-  Widget _statsRow(
-      int totalDays, double rendered, bool isDone, bool isDark) {
+  Widget _statsRow(int totalDays, double rendered, bool isDone, bool isDark) {
     return Row(
       children: [
         Expanded(
@@ -725,14 +604,10 @@ class _DashboardPageState extends State<DashboardPage>
         const SizedBox(width: 10),
         Expanded(
           child: _miniStatCard(
-            isDone
-                ? Icons.check_circle_rounded
-                : Icons.timer_outlined,
+            isDone ? Icons.check_circle_rounded : Icons.timer_outlined,
             '${rendered.toStringAsFixed(0)}h',
             'Rendered',
-            isDone
-                ? const Color(0xFF10B981)
-                : const Color(0xFF1B3769),
+            isDone ? const Color(0xFF10B981) : const Color(0xFF1B3769),
             isDark,
           ),
         ),
@@ -740,22 +615,14 @@ class _DashboardPageState extends State<DashboardPage>
     );
   }
 
-  Widget _miniStatCard(IconData icon, String value, String label,
-      Color color, bool isDark) {
+  Widget _miniStatCard(IconData icon, String value, String label, Color color, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: ThemeManager.surface(context),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: ThemeManager.border(context)),
-        boxShadow: isDark
-            ? null
-            : [
-                const BoxShadow(
-                    color: Color(0x06000000),
-                    blurRadius: 4,
-                    offset: Offset(0, 2))
-              ],
+        boxShadow: isDark ? null : [const BoxShadow(color: Color(0x06000000), blurRadius: 4, offset: Offset(0, 2))],
       ),
       child: Row(
         children: [
@@ -774,14 +641,12 @@ class _DashboardPageState extends State<DashboardPage>
               Text(
                 value,
                 style: GoogleFonts.dmSans(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: ThemeManager.primary(context)),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: ThemeManager.primary(context),
+                ),
               ),
-              Text(label,
-                  style: GoogleFonts.dmSans(
-                      fontSize: 10,
-                      color: ThemeManager.muted(context))),
+              Text(label, style: GoogleFonts.dmSans(fontSize: 10, color: ThemeManager.muted(context))),
             ],
           ),
         ],
@@ -790,9 +655,12 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
   // ── Recent schedules card ─────────────────────────────────────────────────
+  // Reads server shape: { date, time_in, time_out,
+  //                       isWorkFromHome, isAcceptedWorkFromHome, isAcceptedEarly }
 
   Widget _recentSchedulesCard(List<Map> schedules, bool isDark) {
     if (schedules.isEmpty) return const SizedBox.shrink();
+
     return _card(
       icon: Icons.history_rounded,
       title: 'Recent records',
@@ -801,20 +669,24 @@ class _DashboardPageState extends State<DashboardPage>
         children: schedules.take(5).toList().asMap().entries.map((e) {
           final i = e.key;
           final s = e.value;
+
           final date = s['date'] as String? ?? '';
           final timeIn = s['time_in'] as String? ?? '--:--';
           final rawTimeOut = s['time_out'] as String?;
-          final isWfh = s['isWorkFromHome'] == true;
+          // isWorkFromHome on the Schedule row means the student logged WFH.
+          // isAcceptedWorkFromHome means the supervisor approved it.
+          final isWfh = (s['isWorkFromHome'] as bool? ?? false) && (s['isAcceptedWorkFromHome'] as bool? ?? false);
           final isAcceptedEarly = s['isAcceptedEarly'] as bool? ?? true;
+
+          // Mirror server getEffectiveTimeIn logic
           final parts = timeIn.split(':');
-          final totalMinutes = (int.tryParse(parts[0]) ?? 99) * 60 + (int.tryParse(parts[1]) ?? 0);
+          final totalMinutes =
+              (int.tryParse(parts[0]) ?? 99) * 60 + (int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0);
           final displayTimeIn = (!isAcceptedEarly && totalMinutes < 8 * 60) ? '08:00:00' : timeIn;
+
           return Column(
             children: [
-              if (i > 0)
-                Divider(
-                    height: 12,
-                    color: ThemeManager.dividerColor(context)),
+              if (i > 0) Divider(height: 12, color: ThemeManager.dividerColor(context)),
               Row(
                 children: [
                   Expanded(
@@ -824,30 +696,23 @@ class _DashboardPageState extends State<DashboardPage>
                         Text(
                           _formatDate(date),
                           style: GoogleFonts.dmSans(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: ThemeManager.primary(context)),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: ThemeManager.primary(context),
+                          ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           '${_formatTime(displayTimeIn)} → ${rawTimeOut != null ? _formatTime(rawTimeOut) : '--:--'}',
-                          style: GoogleFonts.dmSans(
-                              fontSize: 11,
-                              color:
-                                  ThemeManager.secondary(context)),
+                          style: GoogleFonts.dmSans(fontSize: 11, color: ThemeManager.secondary(context)),
                         ),
                       ],
                     ),
                   ),
-                  if (isWfh) ...[
-                    _badge('WFH', const Color(0xFF2563EB), isDark),
-                    const SizedBox(width: 6),
-                  ],
+                  if (isWfh) ...[_badge('WFH', const Color(0xFF2563EB), isDark), const SizedBox(width: 6)],
                   _badge(
                     rawTimeOut != null ? 'Done' : 'Active',
-                    rawTimeOut != null
-                        ? const Color(0xFF10B981)
-                        : const Color(0xFF1B3769),
+                    rawTimeOut != null ? const Color(0xFF10B981) : const Color(0xFF1B3769),
                     isDark,
                   ),
                 ],
@@ -867,8 +732,7 @@ class _DashboardPageState extends State<DashboardPage>
       title: 'Recent activities',
       isDark: isDark,
       child: Column(
-        children:
-            activities.take(3).toList().asMap().entries.map((e) {
+        children: activities.take(3).toList().asMap().entries.map((e) {
           final i = e.key;
           final a = e.value;
           final desc = a['description'] as String? ?? '';
@@ -876,24 +740,17 @@ class _DashboardPageState extends State<DashboardPage>
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (i > 0)
-                Divider(
-                    height: 12,
-                    color: ThemeManager.dividerColor(context)),
+              if (i > 0) Divider(height: 12, color: ThemeManager.dividerColor(context)),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF7C3AED)
-                          .withOpacity(isDark ? 0.12 : 0.09),
+                      color: const Color(0xFF7C3AED).withOpacity(isDark ? 0.12 : 0.09),
                       borderRadius: BorderRadius.circular(7),
                     ),
-                    child: const Icon(
-                        Icons.photo_camera_outlined,
-                        size: 13,
-                        color: Color(0xFF7C3AED)),
+                    child: const Icon(Icons.photo_camera_outlined, size: 13, color: Color(0xFF7C3AED)),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -901,24 +758,20 @@ class _DashboardPageState extends State<DashboardPage>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          desc.isNotEmpty
-                              ? desc
-                              : 'Activity record',
+                          desc.isNotEmpty ? desc : 'Activity record',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.dmSans(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: ThemeManager.primary(context)),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: ThemeManager.primary(context),
+                          ),
                         ),
                         if (createdAt.isNotEmpty) ...[
                           const SizedBox(height: 2),
                           Text(
                             _formatDateTime(createdAt),
-                            style: GoogleFonts.dmSans(
-                                fontSize: 10,
-                                color:
-                                    ThemeManager.muted(context)),
+                            style: GoogleFonts.dmSans(fontSize: 10, color: ThemeManager.muted(context)),
                           ),
                         ],
                       ],
@@ -941,34 +794,43 @@ class _DashboardPageState extends State<DashboardPage>
     final d = _data!;
     final office = d['office'] as Map? ?? {};
     final attendanceToday = d['attendance_today'] as Map? ?? {};
-    final students =
-        (d['students'] as List?)?.cast<Map>() ?? [];
-    final recentLogs =
-        (d['recent_logs'] as List?)?.cast<Map>() ?? [];
+    final students = (d['students'] as List?)?.cast<Map>() ?? [];
+    final recentLogs = (d['recent_logs'] as List?)?.cast<Map>() ?? [];
 
-    final totalStudents =
-        (attendanceToday['total_students'] as num?)?.toInt() ?? 0;
-    final present =
-        (attendanceToday['present'] as num?)?.toInt() ?? 0;
-    final timedOut =
-        (attendanceToday['timed_out'] as num?)?.toInt() ?? 0;
+    final totalStudents = (attendanceToday['total_students'] as num?)?.toInt() ?? 0;
+    final present = (attendanceToday['present'] as num?)?.toInt() ?? 0;
+    final timedOut = (attendanceToday['timed_out'] as num?)?.toInt() ?? 0;
     final wfh = (attendanceToday['wfh'] as num?)?.toInt() ?? 0;
-    final absent =
-        (attendanceToday['absent'] as num?)?.toInt() ?? 0;
-    final officeName =
-        office['office_name'] as String? ?? 'Office';
+    final absent = (attendanceToday['absent'] as num?)?.toInt() ?? 0;
+    final officeName = office['office_name'] as String? ?? 'Office';
 
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: isLandscape
-            ? _supervisorPcLayout(isDark, officeName,
-                totalStudents, present, timedOut, wfh, absent,
-                students, recentLogs)
-            : _supervisorMobileLayout(isDark, officeName,
-                totalStudents, present, timedOut, wfh, absent,
-                students, recentLogs),
+            ? _supervisorPcLayout(
+                isDark,
+                officeName,
+                totalStudents,
+                present,
+                timedOut,
+                wfh,
+                absent,
+                students,
+                recentLogs,
+              )
+            : _supervisorMobileLayout(
+                isDark,
+                officeName,
+                totalStudents,
+                present,
+                timedOut,
+                wfh,
+                absent,
+                students,
+                recentLogs,
+              ),
       ),
     );
   }
@@ -989,24 +851,24 @@ class _DashboardPageState extends State<DashboardPage>
       children: [
         _animated(0, _supervisorBanner(officeName, isDark)),
         const SizedBox(height: 14),
-        _animated(
-            1,
-            _attendanceStatsRow(
-                total, present, timedOut, wfh, absent, isDark)),
+        _animated(1, _attendanceStatsRow(total, present, timedOut, wfh, absent, isDark)),
         const SizedBox(height: 12),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              flex: 5,
-              child: _animated(2, _studentsCard(students, isDark)),
-            ),
+            Expanded(flex: 4, child: _buildMissionCard(context)),
             const SizedBox(width: 12),
-            Expanded(
-              flex: 3,
-              child:
-                  _animated(3, _recentLogsCard(recentLogs, isDark)),
-            ),
+            Expanded(flex: 4, child: _buildVisionCard(context)),
+
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: 5, child: _animated(2, _studentsCard(students, isDark))),
+            const SizedBox(width: 12),
+            Expanded(flex: 3, child: _animated(3, _recentLogsCard(recentLogs, isDark))),
           ],
         ),
         const SizedBox(height: 20),
@@ -1030,10 +892,7 @@ class _DashboardPageState extends State<DashboardPage>
       children: [
         _animated(0, _supervisorBanner(officeName, isDark)),
         const SizedBox(height: 12),
-        _animated(
-            1,
-            _attendanceStatsRow(
-                total, present, timedOut, wfh, absent, isDark)),
+        _animated(1, _attendanceStatsRow(total, present, timedOut, wfh, absent, isDark)),
         const SizedBox(height: 10),
         _animated(2, _studentsCard(students, isDark)),
         const SizedBox(height: 10),
@@ -1051,8 +910,7 @@ class _DashboardPageState extends State<DashboardPage>
     final firstName = user['first_name'] as String? ?? '';
     return Container(
       width: double.infinity,
-      padding:
-          const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
@@ -1061,14 +919,11 @@ class _DashboardPageState extends State<DashboardPage>
         ),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
-          BoxShadow(
-              color:
-                  const Color(0xFF1B3769).withOpacity(0.25),
-              blurRadius: 10,
-              offset: const Offset(0, 3)),
+          BoxShadow(color: const Color(0xFF1B3769).withOpacity(0.25), blurRadius: 10, offset: const Offset(0, 3)),
         ],
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: Column(
@@ -1077,46 +932,32 @@ class _DashboardPageState extends State<DashboardPage>
                 Text(
                   'Welcome back,',
                   style: GoogleFonts.dmSans(
-                      fontSize: 13,
-                      color: Colors.white.withOpacity(0.60),
-                      fontWeight: FontWeight.w500),
+                    fontSize: 13,
+                    color: Colors.white.withOpacity(0.60),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  firstName.isNotEmpty
-                      ? firstName
-                      : 'Supervisor',
-                  style: GoogleFonts.dmSans(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white),
+                  firstName.isNotEmpty ? firstName : 'Supervisor',
+                  style: GoogleFonts.dmSans(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white),
                 ),
                 const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: [
-                    _heroBadge(
-                        Icons.business_rounded, officeName),
-                    _heroBadge(
-                        Icons.calendar_today_rounded,
-                        DateFormat('MMMM d, yyyy').format(now)),
-                  ],
-                ),
+                _heroBadge(Icons.business_rounded, officeName),
+                const SizedBox(height: 4),
+                _heroBadge(Icons.calendar_today_rounded, DateFormat('MMMM d, yyyy').format(now)),
               ],
             ),
           ),
+          const SizedBox(width: 12),
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.08),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                  color: Colors.white.withOpacity(0.12)),
+              border: Border.all(color: Colors.white.withOpacity(0.12)),
             ),
-            child: Icon(Icons.manage_accounts_rounded,
-                size: 28,
-                color: Colors.white.withOpacity(0.70)),
+            child: Icon(Icons.manage_accounts_rounded, size: 28, color: Colors.white.withOpacity(0.70)),
           ),
         ],
       ),
@@ -1125,26 +966,27 @@ class _DashboardPageState extends State<DashboardPage>
 
   Widget _heroBadge(IconData icon, String label) {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.12),
         borderRadius: BorderRadius.circular(20),
-        border:
-            Border.all(color: Colors.white.withOpacity(0.16)),
+        border: Border.all(color: Colors.white.withOpacity(0.16)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon,
-              size: 9, color: Colors.white.withOpacity(0.70)),
+          Icon(icon, size: 9, color: Colors.white.withOpacity(0.70)),
           const SizedBox(width: 4),
-          Text(
-            label,
-            style: GoogleFonts.dmSans(
+          Flexible(
+            child: Text(
+              label,
+              style: GoogleFonts.dmSans(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
-                color: Colors.white.withOpacity(0.85)),
+                color: Colors.white.withOpacity(0.85),
+              ),
+              softWrap: true,
+            ),
           ),
         ],
       ),
@@ -1153,29 +995,44 @@ class _DashboardPageState extends State<DashboardPage>
 
   // ── Attendance stats row ──────────────────────────────────────────────────
 
-  Widget _attendanceStatsRow(int total, int present, int timedOut,
-      int wfh, int absent, bool isDark) {
-    return Row(
+  Widget _attendanceStatsRow(int total, int present, int timedOut, int wfh, int absent, bool isDark) {
+    final isLandscape = MediaQuery.of(context).size.width > MediaQuery.of(context).size.height;
+
+    if (isLandscape) {
+      return Row(
+        children: [
+          Expanded(child: _miniStatCard(Icons.people_rounded, '$total', 'Total', const Color(0xFF1B3769), isDark)),
+          const SizedBox(width: 8),
+          Expanded(child: _miniStatCard(Icons.login_rounded, '$present', 'Present', const Color(0xFF10B981), isDark)),
+          const SizedBox(width: 8),
+          Expanded(child: _miniStatCard(Icons.logout_rounded, '$timedOut', 'Done', const Color(0xFF2563EB), isDark)),
+          const SizedBox(width: 8),
+          Expanded(child: _miniStatCard(Icons.home_outlined, '$wfh', 'WFH', const Color(0xFF7C3AED), isDark)),
+          const SizedBox(width: 8),
+          Expanded(child: _miniStatCard(Icons.event_busy_rounded, '$absent', 'Absent', Colors.red[600]!, isDark)),
+        ],
+      );
+    }
+
+    return Column(
       children: [
-        Expanded(
-            child: _miniStatCard(Icons.people_rounded, '$total',
-                'Total', const Color(0xFF1B3769), isDark)),
-        const SizedBox(width: 8),
-        Expanded(
-            child: _miniStatCard(Icons.login_rounded, '$present',
-                'Present', const Color(0xFF10B981), isDark)),
-        const SizedBox(width: 8),
-        Expanded(
-            child: _miniStatCard(Icons.logout_rounded, '$timedOut',
-                'Done', const Color(0xFF2563EB), isDark)),
-        const SizedBox(width: 8),
-        Expanded(
-            child: _miniStatCard(Icons.home_outlined, '$wfh',
-                'WFH', const Color(0xFF7C3AED), isDark)),
-        const SizedBox(width: 8),
-        Expanded(
-            child: _miniStatCard(Icons.event_busy_rounded,
-                '$absent', 'Absent', Colors.red[600]!, isDark)),
+        Row(
+          children: [
+            Expanded(child: _miniStatCard(Icons.people_rounded, '$total', 'Total', const Color(0xFF1B3769), isDark)),
+            const SizedBox(width: 8),
+            Expanded(child: _miniStatCard(Icons.login_rounded, '$present', 'Present', const Color(0xFF10B981), isDark)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(child: _miniStatCard(Icons.logout_rounded, '$timedOut', 'Done', const Color(0xFF2563EB), isDark)),
+            const SizedBox(width: 8),
+            Expanded(child: _miniStatCard(Icons.home_outlined, '$wfh', 'WFH', const Color(0xFF7C3AED), isDark)),
+            const SizedBox(width: 8),
+            Expanded(child: _miniStatCard(Icons.event_busy_rounded, '$absent', 'Absent', Colors.red[600]!, isDark)),
+          ],
+        ),
       ],
     );
   }
@@ -1189,25 +1046,19 @@ class _DashboardPageState extends State<DashboardPage>
   ]) {
     String base;
     if (middleName.trim().isNotEmpty) {
-      final middleInitials = middleName
+      final initials = middleName
           .trim()
           .split(RegExp(r'\s+'))
-          .map((word) => word.isNotEmpty ? word[0].toUpperCase() : '')
+          .map((w) => w.isNotEmpty ? w[0].toUpperCase() : '')
           .join('.');
-      base = '$firstName $middleInitials. $lastName';
+      base = '$firstName $initials. $lastName';
     } else {
       base = '$firstName $lastName';
     }
-
     final suffix = suffixName.trim();
-    if (suffix.isNotEmpty) {
-      base = '$base, $suffix';
-    }
-
+    if (suffix.isNotEmpty) base = '$base, $suffix';
     final ext = extensionName?.trim();
-    if (ext != null && ext.isNotEmpty) {
-      base = '$base, $ext';
-    }
+    if (ext != null && ext.isNotEmpty) base = '$base, $ext';
     return base;
   }
 
@@ -1218,10 +1069,10 @@ class _DashboardPageState extends State<DashboardPage>
         title: 'Students',
         isDark: isDark,
         child: Center(
-          child: Text('No students registered',
-              style: GoogleFonts.dmSans(
-                  fontSize: 13,
-                  color: ThemeManager.muted(context))),
+          child: Text(
+            'No students registered',
+            style: GoogleFonts.dmSans(fontSize: 13, color: ThemeManager.muted(context)),
+          ),
         ),
       );
     }
@@ -1231,14 +1082,10 @@ class _DashboardPageState extends State<DashboardPage>
       isDark: isDark,
       trailing: Text(
         '${students.length} total',
-        style: GoogleFonts.dmSans(
-            fontSize: 11,
-            color: ThemeManager.muted(context),
-            fontWeight: FontWeight.w500),
+        style: GoogleFonts.dmSans(fontSize: 11, color: ThemeManager.muted(context), fontWeight: FontWeight.w500),
       ),
       child: Column(
-        children:
-            students.take(8).toList().asMap().entries.map((e) {
+        children: students.take(8).toList().asMap().entries.map((e) {
           final i = e.key;
           final s = e.value;
           final firstName = s['first_name'] as String? ?? '';
@@ -1247,33 +1094,25 @@ class _DashboardPageState extends State<DashboardPage>
           final suffixName = s['suffix_name'] as String? ?? '';
           final extensionName = s['extension_name'] as String? ?? '';
 
-          final rendered =
-              (s['total_rendered_hours'] as num?)?.toDouble() ??
-                  0;
-          final target =
-              (s['target_hours'] as num?)?.toDouble() ?? 1;
+          // progress.js fields come back on the student object
+          final rendered = (s['completed_hours'] as num?)?.toDouble() ?? 0;
+          final target = (s['target_hours'] as num?)?.toDouble() ?? 1;
           final pct = (rendered / target).clamp(0.0, 1.0);
-          final isDone = rendered >= target;
+          final isDone = s['is_done'] as bool? ?? rendered >= target;
           final todaySched = s['today_schedule'] as Map?;
           final isPresent = todaySched != null;
-          final progressColor = isDone
-              ? const Color(0xFF10B981)
-              : const Color(0xFF1B3769);
+          final progressColor = isDone ? const Color(0xFF10B981) : const Color(0xFF1B3769);
 
           return Column(
             children: [
-              if (i > 0)
-                Divider(
-                    height: 14,
-                    color: ThemeManager.dividerColor(context)),
+              if (i > 0) Divider(height: 14, color: ThemeManager.dividerColor(context)),
               Row(
                 children: [
                   _buildStudentAvatar(s, 34),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
@@ -1282,10 +1121,10 @@ class _DashboardPageState extends State<DashboardPage>
                                 _formatFullName(firstName, middleName, lastName, suffixName, extensionName),
                                 overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.dmSans(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: ThemeManager.primary(
-                                        context)),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: ThemeManager.primary(context),
+                                ),
                               ),
                             ),
                             const SizedBox(width: 6),
@@ -1294,9 +1133,7 @@ class _DashboardPageState extends State<DashboardPage>
                               height: 7,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: isPresent
-                                    ? const Color(0xFF10B981)
-                                    : ThemeManager.faint(context),
+                                color: isPresent ? const Color(0xFF10B981) : ThemeManager.faint(context),
                               ),
                             ),
                           ],
@@ -1306,14 +1143,11 @@ class _DashboardPageState extends State<DashboardPage>
                           children: [
                             Expanded(
                               child: ClipRRect(
-                                borderRadius:
-                                    BorderRadius.circular(4),
+                                borderRadius: BorderRadius.circular(4),
                                 child: LinearProgressIndicator(
                                   value: pct,
-                                  backgroundColor: ThemeManager
-                                      .dividerColor(context),
-                                  valueColor:
-                                      AlwaysStoppedAnimation<Color>(progressColor),
+                                  backgroundColor: ThemeManager.dividerColor(context),
+                                  valueColor: AlwaysStoppedAnimation<Color>(progressColor),
                                   minHeight: 5,
                                 ),
                               ),
@@ -1322,9 +1156,10 @@ class _DashboardPageState extends State<DashboardPage>
                             Text(
                               '${rendered.toStringAsFixed(0)}h',
                               style: GoogleFonts.dmSans(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  color: progressColor),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: progressColor,
+                              ),
                             ),
                           ],
                         ),
@@ -1349,8 +1184,7 @@ class _DashboardPageState extends State<DashboardPage>
       title: 'Recent activity',
       isDark: isDark,
       child: Column(
-        children:
-            logs.take(6).toList().asMap().entries.map((e) {
+        children: logs.take(6).toList().asMap().entries.map((e) {
           final i = e.key;
           final log = e.value;
           final type = log['log_type'] as String? ?? 'info';
@@ -1361,47 +1195,38 @@ class _DashboardPageState extends State<DashboardPage>
 
           return Column(
             children: [
-              if (i > 0)
-                Divider(
-                    height: 10,
-                    color: ThemeManager.dividerColor(context)),
+              if (i > 0) Divider(height: 10, color: ThemeManager.dividerColor(context)),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: logColor
-                          .withOpacity(isDark ? 0.12 : 0.09),
+                      color: logColor.withOpacity(isDark ? 0.12 : 0.09),
                       borderRadius: BorderRadius.circular(7),
                     ),
-                    child:
-                        Icon(logIcon, size: 12, color: logColor),
+                    child: Icon(logIcon, size: 12, color: logColor),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           message,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.dmSans(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color:
-                                  ThemeManager.primary(context)),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: ThemeManager.primary(context),
+                          ),
                         ),
                         if (createdAt.isNotEmpty) ...[
                           const SizedBox(height: 1),
                           Text(
                             _formatDateTime(createdAt),
-                            style: GoogleFonts.dmSans(
-                                fontSize: 10,
-                                color:
-                                    ThemeManager.muted(context)),
+                            style: GoogleFonts.dmSans(fontSize: 10, color: ThemeManager.muted(context)),
                           ),
                         ],
                       ],
@@ -1466,14 +1291,7 @@ class _DashboardPageState extends State<DashboardPage>
         color: ThemeManager.surface(context),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: ThemeManager.border(context)),
-        boxShadow: isDark
-            ? null
-            : [
-                const BoxShadow(
-                    color: Color(0x06000000),
-                    blurRadius: 4,
-                    offset: Offset(0, 2))
-              ],
+        boxShadow: isDark ? null : [const BoxShadow(color: Color(0x06000000), blurRadius: 4, offset: Offset(0, 2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1482,30 +1300,24 @@ class _DashboardPageState extends State<DashboardPage>
             children: [
               Container(
                 padding: const EdgeInsets.all(7),
-                decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon,
-                    color: iconColor,
-                    size: 15),
+                decoration: BoxDecoration(color: iconColor.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
+                child: Icon(icon, color: iconColor, size: 15),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   title,
                   style: GoogleFonts.dmSans(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: ThemeManager.primary(context)),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: ThemeManager.primary(context),
+                  ),
                 ),
               ),
               if (trailing != null) trailing,
             ],
           ),
-          Divider(
-              height: 20,
-              color: ThemeManager.dividerColor(context)),
+          Divider(height: 20, color: ThemeManager.dividerColor(context)),
           child,
         ],
       ),
@@ -1514,8 +1326,7 @@ class _DashboardPageState extends State<DashboardPage>
 
   Widget _badge(String label, Color color, bool isDark) {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
         color: color.withOpacity(isDark ? 0.12 : 0.09),
         borderRadius: BorderRadius.circular(5),
@@ -1523,37 +1334,50 @@ class _DashboardPageState extends State<DashboardPage>
       ),
       child: Text(
         label,
-        style: GoogleFonts.dmSans(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            color: color),
+        style: GoogleFonts.dmSans(fontSize: 10, fontWeight: FontWeight.w700, color: color),
       ),
     );
   }
 
   Color _logColor(String type) {
     switch (type) {
-      case 'timeIn':   return const Color(0xFF10B981);
-      case 'timeOut':  return const Color(0xFFFF4E0B);
-      case 'create':   return const Color(0xFF2563EB);
-      case 'update':   return const Color(0xFF7C3AED);
-      case 'delete':   return const Color(0xFFDC2626);
-      case 'sync':     return const Color(0xFF0891B2);
-      case 'error':    return const Color(0xFFDC2626);
-      default:         return const Color(0xFF6B7280);
+      case 'timeIn':
+        return const Color(0xFF10B981);
+      case 'timeOut':
+        return const Color(0xFFFF4E0B);
+      case 'create':
+        return const Color(0xFF2563EB);
+      case 'update':
+        return const Color(0xFF7C3AED);
+      case 'delete':
+        return const Color(0xFFDC2626);
+      case 'sync':
+        return const Color(0xFF0891B2);
+      case 'error':
+        return const Color(0xFFDC2626);
+      default:
+        return const Color(0xFF6B7280);
     }
   }
 
   IconData _logIcon(String type) {
     switch (type) {
-      case 'timeIn':   return Icons.login_rounded;
-      case 'timeOut':  return Icons.logout_rounded;
-      case 'create':   return Icons.add_circle_rounded;
-      case 'update':   return Icons.edit_rounded;
-      case 'delete':   return Icons.delete_rounded;
-      case 'sync':     return Icons.sync_rounded;
-      case 'error':    return Icons.error_rounded;
-      default:         return Icons.info_rounded;
+      case 'timeIn':
+        return Icons.login_rounded;
+      case 'timeOut':
+        return Icons.logout_rounded;
+      case 'create':
+        return Icons.add_circle_rounded;
+      case 'update':
+        return Icons.edit_rounded;
+      case 'delete':
+        return Icons.delete_rounded;
+      case 'sync':
+        return Icons.sync_rounded;
+      case 'error':
+        return Icons.error_rounded;
+      default:
+        return Icons.info_rounded;
     }
   }
 
@@ -1580,10 +1404,88 @@ class _DashboardPageState extends State<DashboardPage>
 
   String _formatDateTime(String dt) {
     try {
-      return DateFormat('MMM d  h:mm a')
-          .format(DateTime.parse(dt).toLocal());
+      return DateFormat('MMM d  h:mm a').format(DateTime.parse(dt).toLocal());
     } catch (_) {
       return dt;
     }
   }
+
+  Widget _buildVisionCard(BuildContext context) {
+    return card(
+      context,
+      icon: Icons.visibility_outlined,
+      iconColor: const Color(0xFF7C3AED),
+      title: 'Vision',
+      child: Text(
+        _loginStore.user.value['office_vision'] as String? ?? '',
+        style: GoogleFonts.dmSans(fontSize: 13, color: ThemeManager.bodyColor(context), height: 1.65),
+      ),
+    );
+  }
+
+  Widget _buildMissionCard(BuildContext context) {
+    return card(
+      context,
+      icon: Icons.flag_outlined,
+      iconColor: const Color(0xFFDB2777),
+      title: 'Mission',
+      child: Text(
+        _loginStore.user.value['office_mission'] as String? ?? '',
+        style: GoogleFonts.dmSans(fontSize: 13, color: ThemeManager.bodyColor(context), height: 1.65),
+      ),
+    );
+  }
+}
+
+Widget card(
+  BuildContext context, {
+  required IconData icon,
+  required Color iconColor,
+  required String title,
+  required Widget child,
+}) {
+  final isDark = ThemeManager.isDark(context);
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: ThemeManager.surface(context),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: ThemeManager.border(context)),
+      boxShadow: isDark
+          ? null
+          : [BoxShadow(color: const Color(0xFF1B3769).withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Card header
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(isDark ? 0.15 : 0.10),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: iconColor, size: 15),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              title,
+              style: GoogleFonts.dmSans(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: ThemeManager.primary(context),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Divider(color: ThemeManager.dividerColor(context), height: 1),
+        const SizedBox(height: 14),
+        child,
+      ],
+    ),
+  );
 }

@@ -3,10 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppSnackBar {
-  /// Provide a [navigatorKey] at app startup so AppSnackBar can always reach
-  /// the root overlay/scaffold even when the calling BuildContext is gone.
-  ///
-  ///   MaterialApp(navigatorKey: AppSnackBar.navigatorKey, ...)
   static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
   static final Map<String, ScaffoldFeatureController<SnackBar, SnackBarClosedReason>> _activeSnackBars = {};
@@ -38,82 +34,12 @@ class AppSnackBar {
   static void loading(BuildContext? context, String message, {String? id}) {
     final key = id ?? 'default';
     _hideLoading(key);
-
     final ctx = _resolve(context);
     if (ctx == null) return;
-
-    final isDark = ThemeManager.isDark(ctx);
-
+    final bool isDark = ThemeManager.isDark(navigatorKey.currentContext ?? ctx);
     final overlay = OverlayEntry(
-      builder: (_) => Material(
-        color: Colors.transparent,
-        child: Stack(
-          children: [
-            ModalBarrier(dismissible: false, color: isDark ? Colors.black.withOpacity(0.6) : Colors.black45),
-            Center(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 40),
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF111827) : Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: isDark ? Colors.white.withOpacity(0.08) : const Color(0xFFE2E8F0)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(isDark ? 0.4 : 0.12),
-                      blurRadius: 32,
-                      offset: const Offset(0, 12),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: const Color(0xFF1B3769).withOpacity(isDark ? 0.15 : 0.07),
-                        border: Border.all(color: const Color(0xFF1B3769).withOpacity(isDark ? 0.25 : 0.12)),
-                      ),
-                      child: const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1B3769)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      message,
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.dmSans(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white.withOpacity(0.90) : const Color(0xFF0F172A),
-                        height: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Please wait…',
-                      style: GoogleFonts.dmSans(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: isDark ? Colors.white.withOpacity(0.35) : const Color(0xFF94A3B8),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+      builder: (_) => _LoadingOverlay(message: message, isDark: isDark),
     );
-
     _safeInsert(ctx, overlay, rootOverlay: true);
     _loadingOverlays[key] = overlay;
   }
@@ -147,7 +73,12 @@ class AppSnackBar {
   // ─── Context resolution ────────────────────────────────────────────────────
 
   static BuildContext? _resolve(BuildContext? context) {
-    if (context != null && _isMounted(context)) return context;
+    if (context == null) {
+      final navCtx = navigatorKey.currentContext;
+      if (navCtx != null && _isMounted(navCtx)) return navCtx;
+      return null;
+    }
+    if (_isMounted(context)) return context;
     final navCtx = navigatorKey.currentContext;
     if (navCtx != null && _isMounted(navCtx)) return navCtx;
     return null;
@@ -159,25 +90,23 @@ class AppSnackBar {
   }
 
   // ─── Safe overlay helpers ─────────────────────────────────────────────────
-
   static void _safeInsert(BuildContext context, OverlayEntry entry, {bool rootOverlay = false}) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      try {
-        if (!_isMounted(context)) return;
-        final overlayState = Overlay.of(context, rootOverlay: rootOverlay);
-        overlayState.insert(entry);
-      } catch (e) {
-        debugPrint('[AppSnackBar] Could not insert overlay: $e');
+    try {
+      final overlayState = navigatorKey.currentState?.overlay;
+      if (overlayState == null) {
+        debugPrint('[AppSnackBar] No overlay state available');
+        return;
       }
-    });
+      overlayState.insert(entry);
+    } catch (e) {
+      debugPrint('[AppSnackBar] Could not insert overlay: $e');
+    }
   }
 
   static void _safeRemove(OverlayEntry entry) {
     try {
       entry.remove();
-    } catch (_) {
-      // Already removed — ignore.
-    }
+    } catch (_) {}
   }
 
   // ─── Internal ──────────────────────────────────────────────────────────────
@@ -248,8 +177,6 @@ class AppSnackBar {
   }) {
     if (id != null) hide(context, id: id);
 
-    // Verify a Scaffold + ScaffoldMessenger is reachable before calling
-    // showSnackBar; if not, fall back to the PC toast path.
     ScaffoldMessengerState? messenger;
     try {
       messenger = ScaffoldMessenger.of(context);
@@ -394,6 +321,84 @@ extension _SnackTypeX on _SnackType {
     _SnackType.warning => 'Warning',
     _SnackType.info => 'Info',
   };
+}
+
+class _LoadingOverlay extends StatelessWidget {
+  final String message;
+  final bool isDark;
+
+  const _LoadingOverlay({required this.message, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        children: [
+          ModalBarrier(dismissible: false, color: isDark ? Colors.black.withOpacity(0.6) : Colors.black45),
+          Center(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 40),
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF111827) : Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: isDark ? Colors.white.withOpacity(0.08) : const Color(0xFFE2E8F0)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(isDark ? 0.4 : 0.12),
+                    blurRadius: 32,
+                    offset: const Offset(0, 12),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFF1B3769).withOpacity(isDark ? 0.15 : 0.07),
+                      border: Border.all(color: const Color(0xFF1B3769).withOpacity(isDark ? 0.25 : 0.12)),
+                    ),
+                    child: const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1B3769)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.dmSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white.withOpacity(0.90) : const Color(0xFF0F172A),
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Please wait…',
+                    style: GoogleFonts.dmSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? Colors.white.withOpacity(0.35) : const Color(0xFF94A3B8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ─── PC Toast widget ───────────────────────────────────────────────────────────

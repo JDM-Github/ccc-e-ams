@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const serverless = require("serverless-http");
@@ -25,10 +26,6 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 router.get("/test", async (req, res) => {
 	res.status(200).json("This is a test endpoint.");
 });
-router.get("/reset", async (req, res) => {
-	await sequelize.sync({ force: true });
-	res.send("Database reset successful.");
-});
 router.use("/user", require("../routes/UserRouter.js"));
 router.use("/super-admin", require("../routes/SuperAdminRouter.js"));
 router.use("/backup", require("../routes/BackupRouter.js"));
@@ -42,9 +39,7 @@ router.post("/send-email", async (req, res) => {
 				message: "Missing required fields: to, subject, and text or html",
 			});
 		}
-
 		const info = await sendEmail(to, subject, text, html);
-
 		res.status(200).json({
 			message: "Email sent successfully",
 			response: info.response,
@@ -59,7 +54,6 @@ router.post("/send-email", async (req, res) => {
 		});
 	}
 });
-
 app.use(express.static(path.join(__dirname, "../client/build")));
 app.use("/.netlify/functions/api", router);
 module.exports.handler = serverless(app);

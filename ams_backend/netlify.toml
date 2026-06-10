@@ -1,28 +1,17 @@
 [build]
-  node_bundler = "esbuild"
+  publish = "frontend/dist"
+  command = "npm install"
   functions = "backend/functions"
-  publish = "frontend"
-  included_files = [
-    "backend/models/**",
-    "backend/middlewares/**",
-    "backend/routes/**",
-    "backend/lib/**",
-    "backend/utils/**",
-    "backend/helpers/**",
-  ]
-  command = "npm install && npm run build"
 
-[dev]
+[functions]
   node_bundler = "esbuild"
-  functions = "backend/functions"
-  publish = "dist"
+  directory = "backend/functions"
   included_files = [
     "backend/models/**",
-    "backend/middlewares/**",
     "backend/routes/**",
-    "backend/lib/**",
-    "backend/utils/**",
-    "backend/helpers/**",
+    "backend/routes/handlers/**",
+    "backend/routes/utils/**",
+    "backend/service/**",
   ]
 
 [[redirects]]

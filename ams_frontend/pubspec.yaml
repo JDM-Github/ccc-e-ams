@@ -57,6 +57,7 @@ dependencies:
   open_file: ^3.3.2
   file_picker: ^10.3.10
   google_fonts: ^8.0.2
+  msix: ^3.16.13
 
 dev_dependencies:
   flutter_test:
@@ -72,16 +73,23 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
+  image_path: "assets/icon.png"
 
   windows:
     generate: true
     image_path: "assets/icon.png"
     icon_size: 48
-  image_path: "assets/icon.png"
 
 flutter_native_splash:
   color: "#FFFFFF"
   image: assets/bg.jpg
+
+msix_config:
+  display_name: CCC AMS
+  publisher_display_name: JDMaster
+  identity_name: com.ccc.ams
+  msix_version: 1.0.0.0
+  logo_path: assets/icon.png
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

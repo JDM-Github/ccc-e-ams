@@ -18,7 +18,7 @@ class _OfficePageState extends State<OfficePage> with TickerProviderStateMixin {
   late List<Animation<double>> _fadeAnims;
   late List<Animation<Offset>> _slideAnims;
 
-  static const int _maxCards = 5; // Identity, Policy, Schedule, Location, Data
+  static const int _maxCards = 5;
 
   @override
   void initState() {
@@ -97,9 +97,12 @@ class _OfficePageState extends State<OfficePage> with TickerProviderStateMixin {
     );
   }
 
-  // ── Top Bar (unchanged except resetStagger on edit) ───────────────────────
+  // ── Top Bar ───────────────────────────────────────────────────────────────
 
   Widget _buildTopBar(bool isDark) {
+    final isLandscape = MediaQuery.of(context).size.width > MediaQuery.of(context).size.height;
+    final officeName = controller.user['office_name'] ?? 'Office';
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       decoration: BoxDecoration(
@@ -107,6 +110,7 @@ class _OfficePageState extends State<OfficePage> with TickerProviderStateMixin {
         border: Border(bottom: BorderSide(color: ThemeManager.dividerColor(context))),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
             padding: const EdgeInsets.all(7),
@@ -117,11 +121,19 @@ class _OfficePageState extends State<OfficePage> with TickerProviderStateMixin {
             child: const Icon(Icons.business_rounded, color: Color(0xFF1B3769), size: 17),
           ),
           const SizedBox(width: 10),
-          Text(
-            controller.user['office_name'] ?? 'Office',
-            style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w600, color: ThemeManager.primary(context)),
+          Expanded(
+            child: Text(
+              officeName,
+              style: GoogleFonts.dmSans(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: ThemeManager.primary(context),
+              ),
+              maxLines: isLandscape ? 1 : 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-          const Spacer(),
+          const SizedBox(width: 10),
           if (controller.isSupervisor && !controller.isEditing)
             _topBtn(
               label: 'Edit Settings',
@@ -199,7 +211,7 @@ class _OfficePageState extends State<OfficePage> with TickerProviderStateMixin {
     );
   }
 
-  // ── PC Layout with staggered cards and equal height ───────────────────────
+  // ── PC Layout ─────────────────────────────────────────────────────────────
 
   Widget _buildPcContent(bool isDark) {
     return SingleChildScrollView(
@@ -234,7 +246,7 @@ class _OfficePageState extends State<OfficePage> with TickerProviderStateMixin {
     );
   }
 
-  // ── Mobile Layout (vertical, staggered) ───────────────────────────────────
+  // ── Mobile Layout ─────────────────────────────────────────────────────────
 
   Widget _buildMobileContent(bool isDark) {
     return SingleChildScrollView(
@@ -256,7 +268,7 @@ class _OfficePageState extends State<OfficePage> with TickerProviderStateMixin {
     );
   }
 
-  // ── Edit Banner (unchanged) ───────────────────────────────────────────────
+  // ── Edit Banner ───────────────────────────────────────────────────────────
 
   Widget _buildEditBanner() {
     return AnimatedSwitcher(
@@ -320,7 +332,7 @@ class _OfficePageState extends State<OfficePage> with TickerProviderStateMixin {
     return base;
   }
 
-  // ── Cards using the new `card` from dialogue_helpers.dart ─────────────────
+  // ── Cards ─────────────────────────────────────────────────────────────────
 
   Widget _buildIdentityCard(bool isDark) {
     final u = controller.user;
@@ -331,6 +343,9 @@ class _OfficePageState extends State<OfficePage> with TickerProviderStateMixin {
       u['suffix_name'] ?? '',
       u['extension_name'],
     );
+    final vision = (u['office_vision'] ?? '').toString().trim();
+    final mission = (u['office_mission'] ?? '').toString().trim();
+    final hasVisionMission = vision.isNotEmpty || mission.isNotEmpty;
 
     return card(
       context,
@@ -342,8 +357,16 @@ class _OfficePageState extends State<OfficePage> with TickerProviderStateMixin {
           if (controller.isEditing) ...[
             _editField(label: 'Office name', ctrl: controller.officeNameCtrl, icon: Icons.business_outlined),
             const SizedBox(height: 10),
+            _editField(label: 'Office acronym', ctrl: controller.officeAcronymCtrl, icon: Icons.business_outlined),
+            const SizedBox(height: 10),
+            _editMultilineField(label: 'Vision', ctrl: controller.officeVisionCtrl, icon: Icons.visibility_outlined),
+            const SizedBox(height: 10),
+            _editMultilineField(label: 'Mission', ctrl: controller.officeMissionCtrl, icon: Icons.flag_outlined),
+            const SizedBox(height: 10),
           ] else ...[
             _infoRow('Office name', u['office_name'] ?? '—'),
+            _divider(),
+            _infoRow('Office acronym', u['office_acronym'] ?? '—'),
             _divider(),
           ],
           _infoRow('Supervisor ID', u['ccc_id'] ?? '—'),
@@ -351,6 +374,11 @@ class _OfficePageState extends State<OfficePage> with TickerProviderStateMixin {
           _infoRow('Supervisor', fullName.isEmpty ? '—' : fullName),
           _divider(),
           _infoRow('Email', u['email'] ?? '—', valueColor: ThemeManager.blue(context)),
+          if (!controller.isEditing && hasVisionMission) ...[
+            _divider(),
+            const SizedBox(height: 2),
+            _visionMissionBlock(vision, mission),
+          ],
         ],
       ),
     );
@@ -531,7 +559,7 @@ class _OfficePageState extends State<OfficePage> with TickerProviderStateMixin {
     );
   }
 
-  // ── Shared UI helpers (unchanged) ─────────────────────────────────────────
+  // ── Shared UI helpers ─────────────────────────────────────────────────────
 
   Widget _infoRow(String label, String value, {Color? valueColor, bool badge = false}) {
     final color = valueColor ?? ThemeManager.primary(context);
@@ -541,27 +569,40 @@ class _OfficePageState extends State<OfficePage> with TickerProviderStateMixin {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(label, style: GoogleFonts.dmSans(fontSize: 12, color: ThemeManager.secondary(context))),
-          badge
-              ? Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: ThemeManager.blue(context).withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    value,
-                    style: GoogleFonts.dmSans(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: ThemeManager.blue(context),
+          Flexible(
+            flex: 2,
+            child: Text(label, style: GoogleFonts.dmSans(fontSize: 12, color: ThemeManager.secondary(context))),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            flex: 3,
+            child: badge
+                ? Align(
+                    alignment: Alignment.centerRight,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: ThemeManager.blue(context).withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        value,
+                        style: GoogleFonts.dmSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: ThemeManager.blue(context),
+                        ),
+                      ),
                     ),
+                  )
+                : Text(
+                    value,
+                    style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w500, color: color),
+                    textAlign: TextAlign.end,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
                   ),
-                )
-              : Text(
-                  value,
-                  style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w500, color: color),
-                ),
+          ),
         ],
       ),
     );
@@ -577,6 +618,40 @@ class _OfficePageState extends State<OfficePage> with TickerProviderStateMixin {
         labelText: label,
         labelStyle: GoogleFonts.dmSans(fontSize: 12, color: ThemeManager.muted(context)),
         prefixIcon: Icon(icon, size: 15, color: ThemeManager.muted(context)),
+        filled: true,
+        fillColor: ThemeManager.inputFillColor(context),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        isDense: true,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: ThemeManager.border(context)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: ThemeManager.border(context)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: Color(0xFF1B3769), width: 1.5),
+        ),
+      ),
+    );
+  }
+
+  Widget _editMultilineField({required String label, required TextEditingController ctrl, required IconData icon}) {
+    return TextFormField(
+      controller: ctrl,
+      maxLines: 4,
+      minLines: 3,
+      style: GoogleFonts.dmSans(fontSize: 13, color: ThemeManager.primary(context)),
+      decoration: InputDecoration(
+        labelText: label,
+        alignLabelWithHint: true,
+        labelStyle: GoogleFonts.dmSans(fontSize: 12, color: ThemeManager.muted(context)),
+        prefixIcon: Padding(
+          padding: const EdgeInsets.only(bottom: 44),
+          child: Icon(icon, size: 15, color: ThemeManager.muted(context)),
+        ),
         filled: true,
         fillColor: ThemeManager.inputFillColor(context),
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
@@ -668,6 +743,53 @@ class _OfficePageState extends State<OfficePage> with TickerProviderStateMixin {
             activeTrackColor: const Color(0xFF1B3769),
             activeColor: Colors.white,
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _visionMissionBlock(String vision, String mission) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (vision.isNotEmpty) ...[
+          _vmSection(icon: Icons.visibility_outlined, label: 'Vision', text: vision),
+          if (mission.isNotEmpty) const SizedBox(height: 8),
+        ],
+        if (mission.isNotEmpty) _vmSection(icon: Icons.flag_outlined, label: 'Mission', text: mission),
+      ],
+    );
+  }
+
+  Widget _vmSection({required IconData icon, required String label, required String text}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1B3769).withOpacity(0.04),
+        border: Border.all(color: const Color(0xFF1B3769).withOpacity(0.10)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 12, color: const Color(0xFF1B3769).withOpacity(0.6)),
+              const SizedBox(width: 5),
+              Text(
+                label.toUpperCase(),
+                style: GoogleFonts.dmSans(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF1B3769).withOpacity(0.6),
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Text(text, style: GoogleFonts.dmSans(fontSize: 12, color: ThemeManager.primary(context), height: 1.55)),
         ],
       ),
     );

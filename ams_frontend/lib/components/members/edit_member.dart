@@ -144,8 +144,8 @@ class _EditMemberDialogState extends State<EditMemberDialog> {
     if (val.isEmpty) return 'Required';
     final n = int.tryParse(val);
     if (n == null) return 'Numbers only';
-    if (n < 400) return 'Min is 400';
-    if (n > 800) return 'Max is 800';
+    if (n < 1) return 'Min is 1';
+    if (n > 99999) return 'Max is 99999';
     return null;
   }
 
@@ -176,6 +176,319 @@ class _EditMemberDialogState extends State<EditMemberDialog> {
       ),
     );
   }
+
+  // ── Router ─────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final isLandscape = MediaQuery.of(context).size.width > MediaQuery.of(context).size.height;
+    return isLandscape ? _buildPcDialog() : _buildMobileSheet();
+  }
+
+  // ── PC dialog ──────────────────────────────────────────────────────────────
+
+  Widget _buildPcDialog() {
+    final isDark = ThemeManager.isDark(context);
+    return Center(
+      child: Container(
+        width: 540,
+        margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        decoration: BoxDecoration(
+          color: ThemeManager.surfaceElevated(context),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: ThemeManager.border(context)),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(isDark ? 0.4 : 0.1), blurRadius: 24, offset: const Offset(0, 8)),
+          ],
+        ),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _pcHeader(isDark),
+              Divider(height: 1, color: ThemeManager.dividerColor(context)),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.60),
+                child: SingleChildScrollView(padding: const EdgeInsets.all(24), child: _formBody(isDark)),
+              ),
+              Divider(height: 1, color: ThemeManager.dividerColor(context)),
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Row(
+                  children: [
+                    Expanded(child: cancelBtn(context, isDark)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _submitButton()),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Mobile sheet ───────────────────────────────────────────────────────────
+
+  Widget _buildMobileSheet() {
+    final isDark = ThemeManager.isDark(context);
+    return Container(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      decoration: BoxDecoration(
+        color: ThemeManager.surfaceElevated(context),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        border: Border(top: BorderSide(color: ThemeManager.border(context))),
+        boxShadow: isDark
+            ? null
+            : [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, -4))],
+      ),
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: ThemeManager.border(context),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _mobileHeader(isDark),
+                const SizedBox(height: 20),
+                _formBody(isDark),
+                const SizedBox(height: 20),
+                SizedBox(width: double.infinity, child: _submitButton()),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Headers ────────────────────────────────────────────────────────────────
+
+  Widget _pcHeader(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1B3769).withOpacity(0.08),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.edit_rounded, color: Color(0xFF1B3769), size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Edit member',
+                  style: GoogleFonts.dmSans(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: ThemeManager.primary(context),
+                  ),
+                ),
+                Text(
+                  widget.member.fullName,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.dmSans(fontSize: 12, color: ThemeManager.muted(context)),
+                ),
+              ],
+            ),
+          ),
+          closeBtn(context, isDark),
+        ],
+      ),
+    );
+  }
+
+  Widget _mobileHeader(bool isDark) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(9),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1B3769).withOpacity(0.08),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(Icons.edit_rounded, color: Color(0xFF1B3769), size: 20),
+        ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Edit member',
+              style: GoogleFonts.dmSans(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: ThemeManager.primary(context),
+              ),
+            ),
+            Text(
+              widget.member.fullName,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.dmSans(fontSize: 12, color: ThemeManager.muted(context)),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // ── Shared form body ───────────────────────────────────────────────────────
+
+  Widget _formBody(bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionLabel('Personal information', Icons.person_outline_rounded, isDark),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _field(
+                _firstName,
+                'First name',
+                Icons.person_outline_rounded,
+                isDark,
+                validator: (v) => _validateName(v?.trim() ?? ''),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _field(
+                _middleName,
+                'Middle name (optional)',
+                Icons.person_outline_rounded,
+                isDark,
+                validator: (v) {
+                  final val = v?.trim() ?? '';
+                  if (val.isEmpty) return null;
+                  if (!RegExp(r"^[a-zA-ZñÑ\s\-']+$").hasMatch(val)) return 'Letters only';
+                  return null;
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _field(
+                _lastName,
+                'Last name',
+                Icons.person_outline_rounded,
+                isDark,
+                validator: (v) => _validateName(v?.trim() ?? ''),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _field(
+                _extensionName,
+                'Extension (opt)',
+                Icons.sort_by_alpha_rounded,
+                isDark,
+                validator: (v) {
+                  final val = v?.trim() ?? '';
+                  if (val.isEmpty) return null;
+                  if (!RegExp(r"^[a-zA-Z0-9\s\.]+$").hasMatch(val)) return 'Letters, numbers, dot, space';
+                  return null;
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: _suffixDropdown()),
+          ],
+        ),
+        const SizedBox(height: 20),
+        _sectionLabel('Account information', Icons.badge_outlined, isDark),
+        if (_loginStore.user.value['role'] == 'supervisor') ...[
+          const SizedBox(height: 12),
+          _field(
+            _customId,
+            'Custom ID',
+            Icons.tag_rounded,
+            isDark,
+            validator: (v) => _validateCustomId(v?.trim() ?? ''),
+          ),
+        ],
+        const SizedBox(height: 10),
+        _field(
+          _email,
+          'Email',
+          Icons.email_outlined,
+          isDark,
+          keyboardType: TextInputType.emailAddress,
+          validator: (v) => _validateEmail(v?.trim() ?? ''),
+        ),
+        if (_isSupervisorEditingOther) ...[
+          const SizedBox(height: 20),
+          _sectionLabel('Academic information', Icons.school_rounded, isDark),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 3, child: _courseDropdown(isDark)),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: _field(
+                  _targetHours,
+                  'Target hours',
+                  Icons.timer_outlined,
+                  isDark,
+                  hint: '1-99999',
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  validator: (v) => _validateTargetHours(v?.trim() ?? ''),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  // ── Submit button (shared) ─────────────────────────────────────────────────
+
+  Widget _submitButton() {
+    return ElevatedButton.icon(
+      onPressed: _save,
+      icon: const Icon(Icons.check_circle_outline_rounded, size: 15),
+      label: Text('Save changes', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF1B3769),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  // ── Sub-widgets ────────────────────────────────────────────────────────────
 
   Widget _suffixDropdown() {
     return DropdownButtonFormField<String>(
@@ -217,226 +530,6 @@ class _EditMemberDialogState extends State<EditMemberDialog> {
           ),
         ),
       ],
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = ThemeManager.isDark(context);
-    return Center(
-      child: Container(
-        width: 540,
-        margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-        decoration: BoxDecoration(
-          color: ThemeManager.surfaceElevated(context),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: ThemeManager.border(context)),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(isDark ? 0.4 : 0.1), blurRadius: 24, offset: const Offset(0, 8)),
-          ],
-        ),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(9),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1B3769).withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.edit_rounded, color: Color(0xFF1B3769), size: 20),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Edit member',
-                            style: GoogleFonts.dmSans(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: ThemeManager.primary(context),
-                            ),
-                          ),
-                          Text(
-                            widget.member.fullName,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.dmSans(fontSize: 12, color: ThemeManager.muted(context)),
-                          ),
-                        ],
-                      ),
-                    ),
-                    closeBtn(context, isDark),
-                  ],
-                ),
-              ),
-
-              Divider(height: 1, color: ThemeManager.dividerColor(context)),
-
-              // Fields
-              ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.60),
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _sectionLabel('Personal information', Icons.person_outline_rounded, isDark),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            flex: 1,
-                            child: _field(
-                              _firstName,
-                              'First name',
-                              Icons.person_outline_rounded,
-                              isDark,
-                              validator: (v) => _validateName(v?.trim() ?? ''),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            flex: 1,
-                            child: _field(
-                              _middleName,
-                              'Middle name (optional)',
-                              Icons.person_outline_rounded,
-                              isDark,
-                              validator: (v) {
-                                final val = v?.trim() ?? '';
-                                if (val.isEmpty) return null;
-                                if (!RegExp(r"^[a-zA-ZñÑ\s\-']+$").hasMatch(val)) return 'Letters only';
-                                return null;
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            flex: 1,
-                            child: _field(
-                              _lastName,
-                              'Last name',
-                              Icons.person_outline_rounded,
-                              isDark,
-                              validator: (v) => _validateName(v?.trim() ?? ''),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            flex: 1,
-                            child: _field(
-                              _extensionName,
-                              'Extension (opt)',
-                              Icons.sort_by_alpha_rounded,
-                              isDark,
-                              validator: (v) {
-                                final val = v?.trim() ?? '';
-                                if (val.isEmpty) return null;
-                                if (!RegExp(r"^[a-zA-Z0-9\s\.]+$").hasMatch(val)) return 'Letters, numbers, dot, space';
-                                return null;
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(flex: 1, child: _suffixDropdown()),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      _sectionLabel('Account information', Icons.badge_outlined, isDark),
-                      if (_loginStore.user.value['role'] == 'supervisor') ...[
-                        const SizedBox(height: 12),
-                        _field(
-                          _customId,
-                          'Custom ID',
-                          Icons.tag_rounded,
-                          isDark,
-                          validator: (v) => _validateCustomId(v?.trim() ?? ''),
-                        ),
-                      ],
-                      const SizedBox(height: 10),
-                      _field(
-                        _email,
-                        'Email',
-                        Icons.email_outlined,
-                        isDark,
-                        keyboardType: TextInputType.emailAddress,
-                        validator: (v) => _validateEmail(v?.trim() ?? ''),
-                      ),
-                      if (_isSupervisorEditingOther) ...[
-                        const SizedBox(height: 20),
-                        _sectionLabel('Academic information', Icons.school_rounded, isDark),
-                        const SizedBox(height: 12),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(flex: 3, child: _courseDropdown(isDark)),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              flex: 2,
-                              child: _field(
-                                _targetHours,
-                                'Target hours',
-                                Icons.timer_outlined,
-                                isDark,
-                                hint: '400–800',
-                                keyboardType: TextInputType.number,
-                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                validator: (v) => _validateTargetHours(v?.trim() ?? ''),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-
-              Divider(height: 1, color: ThemeManager.dividerColor(context)),
-
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Row(
-                  children: [
-                    Expanded(child: cancelBtn(context, isDark)),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _save,
-                        icon: const Icon(Icons.check_circle_outline_rounded, size: 15),
-                        label: Text(
-                          'Save changes',
-                          style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1B3769),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 

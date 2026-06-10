@@ -57,5 +57,6 @@ module.exports = {
 	SpecialKey: require("./SpecialKeyModel.js"),
 	SuperAdmin: require("./SuperAdminModel.js"),
 	SuperAdminLog: require("./SuperAdminLogModel.js"),
+	CollegeInfo: require("./CollegeInfoModel.js"),
 	OfficeBackup // I uncomment this now
 };

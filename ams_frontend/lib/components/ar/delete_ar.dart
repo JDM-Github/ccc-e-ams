@@ -42,7 +42,6 @@ class DeleteARImageDialog extends StatelessWidget {
               padding: const EdgeInsets.all(24),
               child: Row(
                 children: [
-                  // Red icon — matches the error / destructive token
                   Container(
                     padding: const EdgeInsets.all(9),
                     decoration: BoxDecoration(
@@ -71,7 +70,6 @@ class DeleteARImageDialog extends StatelessWidget {
                       ],
                     ),
                   ),
-                  // Close button
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
                     child: Container(
@@ -147,10 +145,14 @@ class DeleteARImageDialog extends StatelessWidget {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       onPressed: () async {
+                        AppSnackBar.loading(null, 'Deleting image…', id: 'del-image');
                         Navigator.pop(context);
-                        await arStore.deleteImage(currentDateTarget + cccId, image.id);
-                        if (context.mounted) {
-                          AppSnackBar.success(context, 'Image deleted');
+                        final success = await arStore.deleteImage(currentDateTarget + cccId, image.id);
+                        AppSnackBar.hide(null, id: 'del-image');
+                        if (success) {
+                          AppSnackBar.success(null, 'Image deleted successfully.');
+                        } else {
+                          AppSnackBar.error(null, 'Failed to delete image.');
                         }
                       },
                       icon: const Icon(Icons.delete_rounded, size: 16),

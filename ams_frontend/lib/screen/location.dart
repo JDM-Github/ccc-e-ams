@@ -111,7 +111,7 @@ class _LocationPageState extends State<LocationPage> with TickerProviderStateMix
 
   Widget _buildTopBar(bool inOffice, bool isDark) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: ThemeManager.surfaceElevated(context),
         border: Border(bottom: BorderSide(color: ThemeManager.dividerColor(context))),
@@ -193,8 +193,8 @@ class _LocationPageState extends State<LocationPage> with TickerProviderStateMix
       height: 34,
       child: ElevatedButton.icon(
         onPressed: onTap,
-        icon: Icon(icon, size: 16),
-        label: Text(label, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600)),
+        icon: Icon(icon, size: 14),
+        label: Text(label, style: GoogleFonts.dmSans(fontSize: 12 , fontWeight: FontWeight.w600)),
         style: ElevatedButton.styleFrom(
           backgroundColor: ThemeManager.brand,
           foregroundColor: Colors.white,

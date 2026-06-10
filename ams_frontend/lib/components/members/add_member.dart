@@ -35,7 +35,6 @@ class _AddStudentSheetState extends State<AddStudentSheet> {
   String? _errorMessage;
   String? _selectedSuffix;
   static const List<String> _suffixes = ['Jr.', 'Sr.', 'II', 'III', 'IV', 'V'];
-
   static const List<String> _courses = [
     'AB Communication',
     'AB English Language Studies',
@@ -189,7 +188,7 @@ class _AddStudentSheetState extends State<AddStudentSheet> {
           border: Border.all(color: ThemeManager.borderStrong(context)),
           boxShadow: ThemeManager.isDark(context)
               ? null
-              : [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 24, offset: const Offset(0, 8))],
+              : [BoxShadow(color: Colors.black.withAlpha((0.12*255).floor()), blurRadius: 24, offset: const Offset(0, 8))],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -458,7 +457,7 @@ class _AddStudentSheetState extends State<AddStudentSheet> {
                 child: _field(
                   controller: _targetHoursController,
                   label: 'Target Hours',
-                  hint: '400–800',
+                  hint: '1-99999',
                   icon: Icons.timer_outlined,
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -467,8 +466,8 @@ class _AddStudentSheetState extends State<AddStudentSheet> {
                     if (val.isEmpty) return 'Required';
                     final parsed = int.tryParse(val);
                     if (parsed == null) return 'Numbers only';
-                    if (parsed < 400) return 'Min 400';
-                    if (parsed > 800) return 'Max 800';
+                    if (parsed < 1) return 'Min 1';
+                    if (parsed > 99999) return 'Max 99999';
                     return null;
                   },
                 ),

@@ -38,12 +38,8 @@ class CustomAppBar extends StatefulWidget {
 
 class _CustomAppBarState extends State<CustomAppBar> {
   int _currentIndex = 7;
-
   final LoginStore _loginStore = LoginStore();
-
-  // ── Pages ──────────────────────────────────────────────────────
   final List<Widget> _pages = [
-    // Add dashboard here
     SchedulePage(),
     MembersPage(),
     UserPage(),
@@ -54,9 +50,8 @@ class _CustomAppBarState extends State<CustomAppBar> {
     DashboardPage(),
   ];
 
-  // ── Nav definitions ────────────────────────────────────────────
   static const _allNavItems = [
-    AppNavItem(icon: Icons.schedule_outlined, activeIcon: Icons.schedule, label: 'Dashboard', index: 7),
+    AppNavItem(icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard, label: 'Dashboard', index: 7),
     AppNavItem(icon: Icons.schedule_outlined, activeIcon: Icons.schedule, label: 'Schedule', index: 0),
     AppNavItem(icon: Icons.groups_outlined, activeIcon: Icons.groups, label: 'Members', index: 1),
     AppNavItem(icon: Icons.history_outlined, activeIcon: Icons.history, label: 'Logs', index: 3),
@@ -65,8 +60,6 @@ class _CustomAppBarState extends State<CustomAppBar> {
     AppNavItem(icon: Icons.business_outlined, activeIcon: Icons.business, label: 'Office', index: 5),
     AppNavItem(icon: Icons.info_outline_rounded, activeIcon: Icons.info_rounded, label: 'About', index: 6),
   ];
-
-  // ── Computed helpers ───────────────────────────────────────────
 
   bool get _isSupervisor => _loginStore.user.value['role'] == 'supervisor';
   bool get _isAdmin => _loginStore.user.value['isAdmin'] == true;
@@ -152,15 +145,15 @@ class _CustomAppBarState extends State<CustomAppBar> {
     }
 
     // Backup
-    AppSnackBar.loading(context, 'Creating backup...', id: 'advance-backup');
+    AppSnackBar.loading(this.context, 'Creating backup...', id: 'advance-backup');
     try {
       final officeId = _loginStore.user.value['office_id'] as String;
       final backupResponse = await RequestHandler().handleRequest('backup/office/$officeId', method: 'GET');
 
       if (!mounted) return;
       if (backupResponse['success'] != true) {
-        AppSnackBar.hide(context, id: 'advance-backup');
-        AppSnackBar.error(context, backupResponse['message'] ?? 'Backup failed.');
+        AppSnackBar.hide(this.context, id: 'advance-backup');
+        AppSnackBar.error(this.context, backupResponse['message'] ?? 'Backup failed.');
         return;
       }
 
@@ -287,7 +280,7 @@ class _CustomAppBarState extends State<CustomAppBar> {
         AppRailNav(
           items: navItems,
           currentIndex: _currentIndex,
-          officeName: user['office_name'] ?? '',
+          officeName: user['office_acronym'] ?? '',
           isSupervisorOrAdmin: _isSupervisor || _isAdmin,
           canAdvanceSY: _canAdvanceSY,
           isViewingCurrentSY: _isViewingCurrentSY,
@@ -316,7 +309,7 @@ class _CustomAppBarState extends State<CustomAppBar> {
                 extensionName: user['extension_name'] ?? '',
                 role: user['role'] ?? 'student',
                 course: user['course'] ?? '',
-                officeName: user['office_name'] ?? '',
+                officeName: user['office_acronym'] ?? '',
                 targetHours: user['target_hours']?.toString() ?? '0',
                 profileLink: user['profile_link'],
                 isSupervisor: _isSupervisor,
@@ -350,7 +343,7 @@ class _CustomAppBarState extends State<CustomAppBar> {
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppMobileBar(
-        officeName: _loginStore.user.value['office_name'] ?? '',
+        officeName: _loginStore.user.value['office_acronym'] ?? '',
         isSupervisorOrAdmin: _isSupervisor || _isAdmin,
         isSupervisor: _isSupervisor,
         canAdvanceSY: _canAdvanceSY,

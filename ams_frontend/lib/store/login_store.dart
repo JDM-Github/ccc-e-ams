@@ -116,6 +116,10 @@ class LoginStore {
           'target_hours': user['target_hours'],
           'office_id': user['office_id'],
           'office_name': user['office_name'],
+          'office_acronym': user['office_acronym'],
+          'office_vision': user['office_vision'],
+          'office_mission': user['office_mission'],
+
           'latitude': user['latitude'],
           'longitude': user['longitude'],
           'altitude': user['altitude'],
@@ -132,7 +136,6 @@ class LoginStore {
           'allow_weekend': user['allow_weekend'],
           'loginTime': DateTime.now().toIso8601String(),
         };
-        print('User logged in: $userData');
         await saveUser(userData, rememberMe);
         isLoading.value = false;
         return response;

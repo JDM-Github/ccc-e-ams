@@ -43,7 +43,6 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
   final List<String> statusOptions = ['All', 'Completed', 'Active'];
   final List<String> sortOptions = ['Newest', 'Oldest', 'Earliest In', 'Latest In'];
 
-  // Semantic colors — fixed regardless of mode
   static const _warning = Color(0xFFD97706);
   static const _danger = Color(0xFFDC2626);
   static const _success = Color(0xFF16A34A);
@@ -255,24 +254,28 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
     }
   }
 
-  void _showAddScheduleDialog() => showDialog(
+  void _showAddScheduleDialog() => showModalBottomSheet(
     context: context,
-    barrierColor: Colors.black87,
-    builder: (_) => Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.all(16),
-      child: AddScheduleDialog(detailStore: _detailStore, selectedDate: DateTime.now()),
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => AddScheduleDialog(
+      detailStore: _detailStore,
+      selectedDate: DateTime.now(),
+      onSuccess: () async {
+        Navigator.pop(context);
+        await _refreshData();
+        AppSnackBar.success(null, 'Schedule added successfully.');
+      },
     ),
   );
-  void _showEditScheduleDialog(ScheduleRecord record, int originalIndex) => showDialog(
+
+  void _showEditScheduleDialog(ScheduleRecord record, int originalIndex) => showModalBottomSheet(
     context: context,
-    barrierColor: Colors.black87,
-    builder: (_) => Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.all(16),
-      child: EditScheduleDialog(record: record, originalIndex: originalIndex, detailStore: _detailStore),
-    ),
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => EditScheduleDialog(record: record, originalIndex: originalIndex, detailStore: _detailStore),
   );
+
   void _showDeleteScheduleDialog(int originalIndex) => showDialog(
     context: context,
     barrierColor: Colors.black87,
@@ -280,40 +283,44 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.all(16),
       child: DeleteScheduleDialog(
-        onConfirm: () {
-          _detailStore.deleteSchedule(originalIndex);
+        onConfirm: () async {
           Navigator.pop(context);
-          AppSnackBar.success(context, 'Schedule record deleted');
-        },
-      ),
-    ),
-  );
-  void _showEditMemberDialog() => showDialog(
-    context: context,
-    barrierColor: Colors.black87,
-    builder: (_) => Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.all(16),
-      child: EditMemberDialog(
-        member: _localMember,
-        onConfirm: (member) async {
-          MembersStore ms = MembersStore();
-          await ms.loadFromLocal();
-          await ms.editMember(member);
-          setState(() => _localMember = member);
+          await _detailStore.deleteSchedule(originalIndex);
+          widget.onClose();
           if (mounted) {
-            Navigator.pop(context);
-            AppSnackBar.success(context, 'Edited member successfully.');
+            await _refreshData();
+            AppSnackBar.success(null, 'Schedule record deleted.');
           }
         },
       ),
     ),
   );
 
+  void _showEditMemberDialog() => showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => EditMemberDialog(
+      member: _localMember,
+      onConfirm: (member) async {
+        MembersStore ms = MembersStore();
+        await ms.loadFromLocal();
+        await ms.editMember(member);
+        setState(() => _localMember = member);
+        if (mounted) {
+          Navigator.pop(context);
+          AppSnackBar.success(context, 'Edited member successfully.');
+        }
+      },
+    ),
+  );
+
+  // ── Shared small widgets ───────────────────────────────────────────────────
+
   Widget _buildStaticSYBadge(BuildContext context, Member member) {
     final userSY = member.current_sy;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: ThemeManager.surfaceTint(context),
         borderRadius: BorderRadius.circular(20),
@@ -322,8 +329,8 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.school_outlined, size: 12, color: ThemeManager.secondary(context)),
-          const SizedBox(width: 5),
+          Icon(Icons.school_outlined, size: 11, color: ThemeManager.secondary(context)),
+          const SizedBox(width: 4),
           Text(
             'AY $userSY-${userSY + 1}',
             style: GoogleFonts.dmSans(
@@ -363,6 +370,82 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
     );
   }
 
+  Widget _roleBadge(String label, Color color, bool isDark, {IconData? icon}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(isDark ? 0.15 : 0.09),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withOpacity(isDark ? 0.3 : 0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[Icon(icon, size: 10, color: color), const SizedBox(width: 4)],
+          Text(
+            label,
+            style: GoogleFonts.dmSans(fontSize: 9, fontWeight: FontWeight.w700, color: color, letterSpacing: 1.1),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _initialsCenter(String initials, double size) {
+    return Center(
+      child: Text(
+        initials,
+        style: TextStyle(fontSize: size, fontWeight: FontWeight.bold, color: Colors.white),
+      ),
+    );
+  }
+
+  Widget _iconBtn(IconData icon, VoidCallback onTap) {
+    return Container(
+      height: 32,
+      width: 32,
+      decoration: BoxDecoration(
+        color: ThemeManager.surfaceTint(context),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: ThemeManager.border(context)),
+      ),
+      child: IconButton(
+        icon: Icon(icon, size: 16),
+        color: ThemeManager.secondary(context),
+        padding: EdgeInsets.zero,
+        onPressed: onTap,
+      ),
+    );
+  }
+
+  /// Compact 34×34 icon button — matches SchedulePage / ARPage pattern.
+  Widget _headerIconBtn({
+    required IconData icon,
+    required Color color,
+    required Color borderColor,
+    required Color iconColor,
+    VoidCallback? onTap,
+    String? tooltip,
+  }) {
+    final btn = GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: borderColor),
+        ),
+        alignment: Alignment.center,
+        child: Icon(icon, size: 17, color: onTap == null ? iconColor.withOpacity(0.4) : iconColor),
+      ),
+    );
+    return tooltip != null ? Tooltip(message: tooltip, child: btn) : btn;
+  }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     final isDark = ThemeManager.isDark(context);
@@ -376,163 +459,208 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
 
     return Scaffold(
       backgroundColor: ThemeManager.scaffold(context),
-      appBar: _buildAppBar(isSupervisor, isSupervisorProfile, isLandscape, isActiveSY, isAdmin, isDark),
+      // ── No appBar — inline header lives in body ──
       body: _detailStore.isLoading && _detailStore.schedules.isEmpty
           ? Center(child: CircularProgressIndicator(color: ThemeManager.blue(context)))
           : isLandscape
-          ? _buildPcLayout(isSupervisor, isAdmin, isSupervisorProfile, displayRecords, isActiveSY)
-          : _buildMobileLayout(isSupervisor, isAdmin, isSupervisorProfile, displayRecords, isActiveSY),
+          ? Column(
+              children: [
+                _buildInlineHeader(isSupervisor, isSupervisorProfile, isActiveSY, isAdmin, isDark),
+                Expanded(child: _buildPcLayout(isSupervisor, isAdmin, isSupervisorProfile, displayRecords, isActiveSY)),
+              ],
+            )
+          : Column(
+              children: [
+                _buildInlineHeader(isSupervisor, isSupervisorProfile, isActiveSY, isAdmin, isDark),
+                Expanded(
+                  child: _buildMobileLayout(isSupervisor, isAdmin, isSupervisorProfile, displayRecords, isActiveSY),
+                ),
+              ],
+            ),
     );
   }
 
-  PreferredSizeWidget _buildAppBar(
-    bool isSupervisor,
-    bool isSupervisorProfile,
-    bool isLandscape,
-    bool isActiveSY,
-    bool isAdmin,
-    bool isDark,
-  ) {
-    return AppBar(
-      backgroundColor: ThemeManager.surfaceElevated(context),
-      elevation: 0,
-      surfaceTintColor: Colors.transparent,
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(1),
-        child: Container(height: 1, color: ThemeManager.dividerColor(context)),
+  // ── Inline header (replaces AppBar) ───────────────────────────────────────
+
+  Widget _buildInlineHeader(bool isSupervisor, bool isSupervisorProfile, bool isActiveSY, bool isAdmin, bool isDark) {
+    final topPadding = MediaQuery.of(context).padding.top;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(8, topPadding + 6, 12, 10),
+      decoration: BoxDecoration(
+        color: ThemeManager.surfaceElevated(context),
+        border: Border(bottom: BorderSide(color: ThemeManager.dividerColor(context))),
+        boxShadow: isDark ? null : [const BoxShadow(color: Color(0x0A000000), blurRadius: 4, offset: Offset(0, 2))],
       ),
-      leading: IconButton(
-        icon: Icon(Icons.arrow_back_rounded, color: ThemeManager.brand),
-        onPressed: () {
-          Navigator.pop(context);
-          widget.onClose();
-        },
-      ),
-      title: Text(
-        _localMember.fullNameExtended,
-        style: GoogleFonts.dmSans(color: ThemeManager.primary(context), fontSize: 17, fontWeight: FontWeight.w600),
-      ),
-      actions: [
-        if (isSupervisor && !isSupervisorProfile && isActiveSY) ...[
-          SizedBox(
-            height: 34,
-            child: OutlinedButton.icon(
-              onPressed: _showAddScheduleDialog,
-              icon: const Icon(Icons.add_rounded, size: 15),
-              label: const Text('Add'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: ThemeManager.blue(context),
-                side: BorderSide(color: ThemeManager.border(context)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                textStyle: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600),
+      child: Row(
+        children: [
+          // Back
+          _headerIconBtn(
+            icon: Icons.arrow_back_rounded,
+            color: Colors.transparent,
+            borderColor: Colors.transparent,
+            iconColor: ThemeManager.brand,
+            onTap: () {
+              Navigator.pop(context);
+              widget.onClose();
+            },
+          ),
+          const SizedBox(width: 4),
+
+          // Inline avatar (small square)
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF0B1C3A), Color(0xFF1B3769)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: _localMember.profileLink != null && _localMember.profileLink!.isNotEmpty
+                  ? Image.network(
+                      _localMember.profileLink!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _initialsCenter(_localMember.initials, 11),
+                    )
+                  : _initialsCenter(_localMember.initials, 11),
             ),
           ),
-          const SizedBox(width: 8),
-        ],
+          const SizedBox(width: 10),
 
-        if (isSupervisor) ...[
-          if (!isAdmin && _memberIsActive)
-            _appBarStatusButton(
-              label: 'Mark for Deletion',
-              icon: Icons.person_remove_rounded,
-              color: _warning,
-              onTap: () => _updateMemberStatus('pending_for_delete'),
+          // Name + subtitle
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _localMember.fullNameExtended,
+                  style: GoogleFonts.dmSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: ThemeManager.primary(context),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  _localMember.role == 'supervisor'
+                      ? (_localMember.isAdmin ? 'Admin' : 'Supervisor')
+                      : 'AY ${_localMember.current_sy}–${_localMember.current_sy + 1}',
+                  style: GoogleFonts.dmSans(
+                    fontSize: 11,
+                    color: ThemeManager.muted(context),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
+          ),
 
-          if (isAdmin) ...[
-            if (_memberIsActive)
-              _appBarStatusButton(
-                label: 'Mark for Deletion',
-                icon: Icons.person_remove_rounded,
-                color: _warning,
-                onTap: () => _updateMemberStatus('pending_for_delete'),
-              ),
-            if (_memberIsPendingDelete) ...[
-              _appBarStatusButton(
-                label: 'Delete',
-                icon: Icons.delete_forever_rounded,
-                color: _danger,
-                onTap: () => _updateMemberStatus('deleted'),
-              ),
-              const SizedBox(width: 6),
-              _appBarStatusButton(
-                label: 'Restore',
-                icon: Icons.restore_rounded,
-                color: _success,
-                onTap: () => _updateMemberStatus('active'),
-              ),
-            ],
-            if (_memberIsDeleted)
-              _appBarStatusButton(
-                label: 'Restore',
-                icon: Icons.restore_rounded,
-                color: _success,
-                onTap: () => _updateMemberStatus('active'),
-              ),
+          // ── Action buttons ───────────────────────────────────────────────
+          if (isSupervisor && !isSupervisorProfile && isActiveSY) ...[
+            const SizedBox(width: 6),
+            _headerIconBtn(
+              icon: Icons.add_rounded,
+              color: ThemeManager.inputFillColor(context),
+              borderColor: ThemeManager.border(context),
+              iconColor: ThemeManager.secondary(context),
+              tooltip: 'Add schedule',
+              onTap: _showAddScheduleDialog,
+            ),
           ],
 
-          if (_isStatusUpdating)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: SizedBox(
+          if (isSupervisor) ...[
+            if (!isAdmin && _memberIsActive) ...[
+              const SizedBox(width: 6),
+              _headerIconBtn(
+                icon: Icons.person_remove_rounded,
+                color: _warning.withOpacity(0.10),
+                borderColor: _warning.withOpacity(0.30),
+                iconColor: _warning,
+                tooltip: 'Mark for deletion',
+                onTap: _isStatusUpdating ? null : () => _updateMemberStatus('pending_for_delete'),
+              ),
+            ],
+            if (isAdmin) ...[
+              if (_memberIsActive) ...[
+                const SizedBox(width: 6),
+                _headerIconBtn(
+                  icon: Icons.person_remove_rounded,
+                  color: _warning.withOpacity(0.10),
+                  borderColor: _warning.withOpacity(0.30),
+                  iconColor: _warning,
+                  tooltip: 'Mark for deletion',
+                  onTap: _isStatusUpdating ? null : () => _updateMemberStatus('pending_for_delete'),
+                ),
+              ],
+              if (_memberIsPendingDelete) ...[
+                const SizedBox(width: 6),
+                _headerIconBtn(
+                  icon: Icons.delete_forever_rounded,
+                  color: _danger.withOpacity(0.10),
+                  borderColor: _danger.withOpacity(0.30),
+                  iconColor: _danger,
+                  tooltip: 'Delete permanently',
+                  onTap: _isStatusUpdating ? null : () => _updateMemberStatus('deleted'),
+                ),
+                const SizedBox(width: 6),
+                _headerIconBtn(
+                  icon: Icons.restore_rounded,
+                  color: _success.withOpacity(0.10),
+                  borderColor: _success.withOpacity(0.30),
+                  iconColor: _success,
+                  tooltip: 'Restore',
+                  onTap: _isStatusUpdating ? null : () => _updateMemberStatus('active'),
+                ),
+              ],
+              if (_memberIsDeleted) ...[
+                const SizedBox(width: 6),
+                _headerIconBtn(
+                  icon: Icons.restore_rounded,
+                  color: _success.withOpacity(0.10),
+                  borderColor: _success.withOpacity(0.30),
+                  iconColor: _success,
+                  tooltip: 'Restore',
+                  onTap: _isStatusUpdating ? null : () => _updateMemberStatus('active'),
+                ),
+              ],
+            ],
+            if (_isStatusUpdating) ...[
+              const SizedBox(width: 8),
+              SizedBox(
                 width: 16,
                 height: 16,
                 child: CircularProgressIndicator(strokeWidth: 2, color: ThemeManager.blue(context)),
               ),
-            ),
-          const SizedBox(width: 8),
-        ],
+            ],
+          ],
 
-        if (!isSupervisorProfile)
-          SizedBox(
-            height: 34,
-            child: ElevatedButton.icon(
-              onPressed: () => showDialog(
+          if (!isSupervisorProfile) ...[
+            const SizedBox(width: 6),
+            _headerIconBtn(
+              icon: Icons.download_rounded,
+              color: ThemeManager.brand.withOpacity(0.10),
+              borderColor: ThemeManager.brand.withOpacity(0.30),
+              iconColor: ThemeManager.brand,
+              tooltip: 'Export to Excel',
+              onTap: () => showDialog(
                 context: context,
                 builder: (_) => ExportExcelDialog(cccId: _localMember.cccId),
               ),
-              icon: const Icon(Icons.download_rounded, size: 15),
-              label: const Text('Export'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: ThemeManager.brand,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                textStyle: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
             ),
-          ),
-        const SizedBox(width: 12),
-      ],
-    );
-  }
-
-  Widget _appBarStatusButton({
-    required String label,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return SizedBox(
-      height: 34,
-      child: OutlinedButton.icon(
-        onPressed: _isStatusUpdating ? null : onTap,
-        icon: Icon(icon, size: 14),
-        label: Text(label),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: color,
-          side: BorderSide(color: color.withOpacity(0.5)),
-          backgroundColor: color.withOpacity(ThemeManager.isDark(context) ? 0.08 : 0.05),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          textStyle: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600),
-        ),
+          ],
+        ],
       ),
     );
   }
+
+  // ── Layouts ────────────────────────────────────────────────────────────────
 
   Widget _buildPcLayout(
     bool isSupervisor,
@@ -594,7 +722,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
     );
   }
 
-  // ── Info panels ────────────────────────────────────────────────────────────
+  // ── Info panels (PC sidebar) ───────────────────────────────────────────────
 
   Widget _buildStudentInfoPanel(bool isSupervisor, bool isAdmin, bool isActiveSY) {
     final totalHours = _detailStore.totalCompletedHours;
@@ -608,7 +736,6 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
         Center(
           child: Column(
             children: [
-              // Avatar
               Container(
                 width: 72,
                 height: 72,
@@ -776,27 +903,6 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
     );
   }
 
-  Widget _roleBadge(String label, Color color, bool isDark, {IconData? icon}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withOpacity(isDark ? 0.15 : 0.09),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withOpacity(isDark ? 0.3 : 0.2)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[Icon(icon, size: 10, color: color), const SizedBox(width: 4)],
-          Text(
-            label,
-            style: GoogleFonts.dmSans(fontSize: 9, fontWeight: FontWeight.w700, color: color, letterSpacing: 1.1),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _pcInfoRow(IconData icon, String label, String value) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -828,15 +934,6 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _initialsCenter(String initials, double size) {
-    return Center(
-      child: Text(
-        initials,
-        style: TextStyle(fontSize: size, fontWeight: FontWeight.bold, color: Colors.white),
-      ),
     );
   }
 
@@ -977,7 +1074,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.all(12),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: ThemeManager.surface(context),
         borderRadius: BorderRadius.circular(12),
@@ -988,7 +1085,9 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
         boxShadow: isDark ? null : [const BoxShadow(color: Color(0x06000000), blurRadius: 6, offset: Offset(0, 2))],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Pending deletion banner ──────────────────────────────────────
           if (_memberIsPendingDelete) ...[
             Container(
               width: double.infinity,
@@ -1012,11 +1111,14 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
             const SizedBox(height: 12),
           ],
 
+          // ── Header row: avatar | name+badges | edit | expand ─────────────
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              // Avatar
               Container(
-                width: 56,
-                height: 56,
+                width: 52,
+                height: 52,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [Color(0xFF0B1C3A), Color(0xFF1B3769)],
@@ -1031,12 +1133,14 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                       ? Image.network(
                           _localMember.profileLink!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _initialsCenter(_localMember.initials, 20),
+                          errorBuilder: (_, __, ___) => _initialsCenter(_localMember.initials, 18),
                         )
-                      : _initialsCenter(_localMember.initials, 20),
+                      : _initialsCenter(_localMember.initials, 18),
                 ),
               ),
               const SizedBox(width: 12),
+
+              // Name + badges — takes all remaining space, never overflows
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1044,16 +1148,20 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                     Text(
                       _localMember.fullNameExtended,
                       style: GoogleFonts.dmSans(
-                        fontSize: 15,
+                        fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: ThemeManager.primary(context),
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
-                    Row(
+                    const SizedBox(height: 5),
+                    // Wrap so badges reflow if both are wide
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
                       children: [
                         _buildStaticSYBadge(context, _localMember),
-                        const SizedBox(width: 6),
                         _roleBadge(
                           _localMember.role.toUpperCase(),
                           _localMember.role == 'supervisor' ? _success : ThemeManager.brand,
@@ -1064,6 +1172,9 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
+
+              // Action buttons — fixed width, never compete with text
               if (isSupervisor) ...[_iconBtn(Icons.edit_rounded, _showEditMemberDialog), const SizedBox(width: 6)],
               _iconBtn(
                 _isInfoExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
@@ -1072,6 +1183,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
             ],
           ),
 
+          // ── Expandable details ───────────────────────────────────────────
           AnimatedCrossFade(
             firstChild: Column(
               children: [
@@ -1148,24 +1260,6 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
     );
   }
 
-  Widget _iconBtn(IconData icon, VoidCallback onTap) {
-    return Container(
-      height: 32,
-      width: 32,
-      decoration: BoxDecoration(
-        color: ThemeManager.surfaceTint(context),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: ThemeManager.border(context)),
-      ),
-      child: IconButton(
-        icon: Icon(icon, size: 16),
-        color: ThemeManager.secondary(context),
-        padding: EdgeInsets.zero,
-        onPressed: onTap,
-      ),
-    );
-  }
-
   Widget _buildInfoRow(IconData icon, String label, String value) {
     return Row(
       children: [
@@ -1205,7 +1299,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
             children: [
               Expanded(
                 child: Container(
-                  height: 36,
+                  height: 34,
                   decoration: BoxDecoration(
                     color: ThemeManager.inputFillColor(context),
                     borderRadius: BorderRadius.circular(8),
@@ -1214,11 +1308,11 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                   child: TextField(
                     style: GoogleFonts.dmSans(fontSize: 13, color: ThemeManager.primary(context)),
                     decoration: InputDecoration(
-                      prefixIcon: Icon(Icons.search_rounded, color: ThemeManager.muted(context), size: 18),
-                      hintText: 'Search date',
+                      prefixIcon: Icon(Icons.search_rounded, color: ThemeManager.muted(context), size: 17),
+                      hintText: 'Search by date…',
                       hintStyle: GoogleFonts.dmSans(color: ThemeManager.hint(context), fontSize: 13),
                       border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       isDense: true,
                     ),
                     onChanged: (val) => setState(() => searchQuery = val),
@@ -1226,97 +1320,84 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              Container(
-                height: 36,
-                width: 36,
-                decoration: BoxDecoration(color: ThemeManager.brand, borderRadius: BorderRadius.circular(8)),
-                child: _detailStore.isLoading && !isFirstLoad
-                    ? const Padding(
-                        padding: EdgeInsets.all(10),
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : IconButton(
-                        icon: const Icon(Icons.refresh_rounded, size: 18),
-                        color: Colors.white,
-                        padding: EdgeInsets.zero,
-                        onPressed: _refreshData,
-                      ),
+              // Refresh — matches SchedulePage compact button style
+              GestureDetector(
+                onTap: _refreshData,
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: ThemeManager.inputFillColor(context),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: ThemeManager.border(context)),
+                  ),
+                  alignment: Alignment.center,
+                  child: _detailStore.isLoading && !isFirstLoad
+                      ? SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: ThemeManager.blue(context)),
+                        )
+                      : Icon(Icons.refresh_rounded, size: 17, color: ThemeManager.secondary(context)),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 8),
           SizedBox(
-            height: 28,
-            child: Row(
+            height: 26,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
               children: [
-                Icon(Icons.filter_list_rounded, color: ThemeManager.muted(context), size: 16),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: [
-                      ...statusOptions.map((status) {
-                        final isSelected = (status == 'All' && selectedStatus == null) || status == selectedStatus;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: FilterChip(
-                            label: Text(status),
-                            selected: isSelected,
-                            onSelected: (_) => setState(() => selectedStatus = status == 'All' ? null : status),
-                            backgroundColor: ThemeManager.inputFillColor(context),
-                            selectedColor: ThemeManager.brand,
-                            checkmarkColor: Colors.white,
-                            labelStyle: GoogleFonts.dmSans(
-                              color: isSelected ? Colors.white : ThemeManager.secondary(context),
-                              fontSize: 11,
-                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                            ),
-                            side: BorderSide(color: isSelected ? ThemeManager.brand : ThemeManager.border(context)),
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
-                          ),
-                        );
-                      }),
-                      Container(
-                        width: 1,
-                        height: 20,
-                        color: ThemeManager.dividerColor(context),
-                        margin: const EdgeInsets.symmetric(horizontal: 6),
-                      ),
-                      ...sortOptions.map((sort) {
-                        final isSelected = (selectedSort ?? 'Newest') == sort;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: FilterChip(
-                            label: Text(sort),
-                            selected: isSelected,
-                            onSelected: (_) => setState(() => selectedSort = sort),
-                            backgroundColor: ThemeManager.inputFillColor(context),
-                            checkmarkColor: ThemeManager.inputFillColor(context),
-                            selectedColor: ThemeManager.brand,
-                            labelStyle: GoogleFonts.dmSans(
-                              color: isSelected ? Colors.white : ThemeManager.secondary(context),
-                              fontSize: 11,
-                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                            ),
-                            side: BorderSide(color: isSelected ? ThemeManager.brand : ThemeManager.border(context)),
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
-                          ),
-                        );
-                      }),
-                    ],
-                  ),
+                ...statusOptions.map((status) {
+                  final isSelected = (status == 'All' && selectedStatus == null) || status == selectedStatus;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: _mobileChip(
+                      status,
+                      isSelected,
+                      () => setState(() => selectedStatus = status == 'All' ? null : status),
+                    ),
+                  );
+                }),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: VerticalDivider(width: 1, thickness: 1, color: ThemeManager.dividerColor(context)),
                 ),
+                ...sortOptions.map((sort) {
+                  final isSelected = (selectedSort ?? 'Newest') == sort;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: _mobileChip(sort, isSelected, () => setState(() => selectedSort = sort)),
+                  );
+                }),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _mobileChip(String label, bool isSelected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? ThemeManager.brand : ThemeManager.inputFillColor(context),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: isSelected ? ThemeManager.brand : ThemeManager.border(context)),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.dmSans(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: isSelected ? Colors.white : ThemeManager.secondary(context),
+          ),
+        ),
       ),
     );
   }
@@ -1496,7 +1577,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         padding: EdgeInsets.zero,
                         onSelected: (value) {
-                          if (value == 'ar')
+                          if (value == 'ar') {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -1504,10 +1585,11 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                                     ARPage(record: record, cccId: widget.member.cccId, role: widget.member.role),
                               ),
                             );
-                          else if (value == 'edit')
+                          } else if (value == 'edit') {
                             _showEditScheduleDialog(record, index);
-                          else if (value == 'delete')
+                          } else if (value == 'delete') {
                             _showDeleteScheduleDialog(index);
+                          }
                         },
                         itemBuilder: (_) => [
                           _popupItem('ar', Icons.folder_rounded, 'View AR', ThemeManager.brand),
@@ -1638,6 +1720,8 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
       ),
     );
   }
+
+  // ── Supervisor info (mobile + PC right panel) ──────────────────────────────
 
   Widget _buildSupervisorInfo() {
     final isDark = ThemeManager.isDark(context);

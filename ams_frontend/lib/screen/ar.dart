@@ -397,26 +397,27 @@ class _ARPageState extends State<ARPage> {
     );
   }
 
-  Future<void> _showProofImage(BuildContext context, String imageSource, String title, DateTime date) async {
+  Future<void> _showProofImage(BuildContext context, ARImage image) async {
     Uint8List? imageBytes;
-    final isUrl = imageSource.startsWith('http://') || imageSource.startsWith('https://');
+    final isUrl = image.image.startsWith('http://') || image.image.startsWith('https://');
     if (isUrl) {
       try {
         final cacheManager = DefaultCacheManager();
-        final file = await cacheManager.getSingleFile(imageSource);
+        final file = await cacheManager.getSingleFile(image.image);
         imageBytes = await file.readAsBytes();
       } catch (e) {
         debugPrint('Error loading cached image: $e');
       }
     } else {
       try {
-        imageBytes = base64Decode(imageSource);
+        imageBytes = base64Decode(image.image);
       } catch (e) {
         debugPrint('Error decoding Base64 image: $e');
       }
     }
     imageBytes ??= Uint8List(0);
     showDialog(
+      // ignore: use_build_context_synchronously
       context: context,
       barrierColor: Colors.black87,
       builder: (context) => Dialog(
@@ -424,10 +425,13 @@ class _ARPageState extends State<ARPage> {
         insetPadding: const EdgeInsets.all(16),
         child: ProofImageViewer(
           imageBytes: imageBytes!,
-          title: title,
-          date: date,
+          title: image.id,
+          date: image.addedAt,
           canModify: _canModify(),
-          onDelete: () => _showDeleteARImageDialog(context, ARImage(id: title, image: imageSource, addedAt: date)),
+          onDelete: () {
+            Navigator.pop(context);
+            _showDeleteARImageDialog(context, image);
+          },
         ),
       ),
     );
@@ -459,6 +463,7 @@ class _ARPageState extends State<ARPage> {
   @override
   Widget build(BuildContext context) {
     final isLandscape = MediaQuery.of(context).size.width > MediaQuery.of(context).size.height;
+    final isDark = ThemeManager.isDark(context);
 
     return Consumer<ARStore>(
       builder: (context, arStore, _) {
@@ -466,16 +471,22 @@ class _ARPageState extends State<ARPage> {
 
         return Scaffold(
           backgroundColor: ThemeManager.bg(context),
-          appBar: _ARAppBar(
-            record: widget.record,
-            onBack: () => Navigator.pop(context),
-            onDownload: () => _downloadAllARImages(context, currentDateTarget + widget.cccId, images),
-          ),
+          // ── No appBar — header lives inline in the body Column ──
           body: arStore.isLoading
               ? Center(child: CircularProgressIndicator(color: ThemeManager.blue(context), strokeWidth: 2))
               : Column(
                   children: [
-                    // ── Read-only banner ──────────────────────
+                    _ARInlineHeader(
+                      record: widget.record,
+                      isDark: isDark,
+                      canModify: _canModify(), // ← pass this in
+                      onBack: () => Navigator.pop(context),
+                      onDownload: () => _downloadAllARImages(context, currentDateTarget + widget.cccId, images),
+                      onAddImage: _showImageSourcePicker, // ← new
+                      onAddSummary: _showDailySummaryDialog, // ← new
+                    ),
+
+                    // ── Read-only banner ──────────────────────────
                     if (!_canModify())
                       _ReadOnlyBanner(
                         isSupervisor: _isSupervisor,
@@ -483,7 +494,7 @@ class _ARPageState extends State<ARPage> {
                         studentIsActive: _studentIsActive,
                       ),
 
-                    // ── Toolbar (PC) or header card (mobile) ──
+                    // ── Toolbar (PC) or header card (mobile) ──────
                     if (isLandscape)
                       _PCToolbar(
                         images: images,
@@ -501,21 +512,18 @@ class _ARPageState extends State<ARPage> {
                         onSummaryTap: _showDailySummaryDialog,
                       ),
 
-                    // ── Content ───────────────────────────────
+                    // ── Content ───────────────────────────────────
                     Expanded(
                       child: images.isEmpty
                           ? _EmptyState(canModify: _canModify())
                           : _ImageGrid(
                               images: images,
                               isLandscape: isLandscape,
-                              onTap: (image) => _showProofImage(context, image.image, 'AR Image', image.addedAt),
+                              onTap: (image) => _showProofImage(context, image),
                             ),
                     ),
                   ],
                 ),
-          floatingActionButton: _canModify() && !isLandscape
-              ? _MobileFABs(onAddImage: _showImageSourcePicker, onAddSummary: _showDailySummaryDialog)
-              : null,
         );
       },
     );
@@ -523,76 +531,162 @@ class _ARPageState extends State<ARPage> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AppBar — matches mobile nav bar with dark gradient + GridPainter
+// Inline Header — replaces _ARAppBar, matches SchedulePage filter bar style
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _ARAppBar extends StatelessWidget implements PreferredSizeWidget {
+class _ARInlineHeader extends StatelessWidget {
   final ScheduleRecord record;
+  final bool isDark;
+  final bool canModify;
   final VoidCallback onBack;
   final VoidCallback onDownload;
+  final VoidCallback onAddImage;
+  final VoidCallback onAddSummary;
 
-  const _ARAppBar({required this.record, required this.onBack, required this.onDownload});
-
-  @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight + 1);
+  const _ARInlineHeader({
+    required this.record,
+    required this.isDark,
+    required this.canModify,
+    required this.onBack,
+    required this.onDownload,
+    required this.onAddImage,
+    required this.onAddSummary,
+  });
 
   @override
   Widget build(BuildContext context) {
     final formattedDate = DateFormat('MMMM d, yyyy').format(record.date);
     final dayOfWeek = DateFormat('EEEE').format(record.date);
+    final topPadding = MediaQuery.of(context).padding.top;
 
-    return AppBar(
-  backgroundColor: ThemeManager.surfaceElevated(context),
-  elevation: 0,
-  surfaceTintColor: Colors.transparent,
-  bottom: PreferredSize(
-    preferredSize: const Size.fromHeight(1),
-    child: Container(height: 1, color: ThemeManager.dividerColor(context)),
-  ),
-  leading: IconButton(
-    icon: Icon(Icons.arrow_back_rounded, color: ThemeManager.brand),
-    onPressed: onBack,
-  ),
-  title: Row(
-    children: [
-      Icon(Icons.assessment_rounded, color: ThemeManager.blue(context), size: 20),
-      const SizedBox(width: 10),
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
+    return Container(
+      padding: EdgeInsets.fromLTRB(8, topPadding + 6, 12, 10),
+      decoration: BoxDecoration(
+        color: ThemeManager.surfaceElevated(context),
+        boxShadow: isDark ? null : [const BoxShadow(color: Color(0x0A000000), blurRadius: 4, offset: Offset(0, 2))],
+        border: Border(bottom: BorderSide(color: ThemeManager.dividerColor(context))),
+      ),
+      child: Row(
         children: [
-          Text(
-            'Activity Report',
-            style: GoogleFonts.dmSans(
-              color: ThemeManager.primary(context),
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.2,
+          // Back
+          _HeaderIconButton(
+            onTap: onBack,
+            tooltip: 'Back',
+            color: Colors.transparent,
+            borderColor: Colors.transparent,
+            child: Icon(Icons.arrow_back_rounded, size: 20, color: ThemeManager.brand),
+          ),
+          const SizedBox(width: 4),
+
+          // Icon badge
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: ThemeManager.blue(context).withOpacity(0.10),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: ThemeManager.blue(context).withOpacity(0.20)),
+            ),
+            child: Icon(Icons.assessment_rounded, color: ThemeManager.blue(context), size: 16),
+          ),
+          const SizedBox(width: 10),
+
+          // Title + date
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Activity Report',
+                  style: GoogleFonts.dmSans(
+                    color: ThemeManager.primary(context),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.1,
+                  ),
+                ),
+                Text(
+                  '$dayOfWeek · $formattedDate',
+                  style: GoogleFonts.dmSans(
+                    color: ThemeManager.muted(context),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
           ),
-          Text(
-            '$dayOfWeek · $formattedDate',
-            style: GoogleFonts.dmSans(
-              color: ThemeManager.muted(context),
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-            ),
+
+          // Download
+          _HeaderIconButton(
+            onTap: onDownload,
+            tooltip: 'Download all as ZIP',
+            color: ThemeManager.blue(context).withOpacity(0.10),
+            borderColor: ThemeManager.blue(context).withOpacity(0.25),
+            child: Icon(Icons.download_rounded, size: 17, color: ThemeManager.blue(context)),
           ),
+
+          // Summary — always visible (read-only users can still view it)
+          const SizedBox(width: 6),
+          _HeaderIconButton(
+            onTap: onAddSummary,
+            tooltip: 'Daily summary',
+            color: ThemeManager.inputFillColor(context),
+            borderColor: ThemeManager.border(context),
+            child: Icon(Icons.description_rounded, size: 17, color: ThemeManager.secondary(context)),
+          ),
+
+          // Add Image — only when canModify
+          if (canModify) ...[
+            const SizedBox(width: 6),
+            _HeaderIconButton(
+              onTap: onAddImage,
+              tooltip: 'Add image',
+              color: const Color(0xFF1B3769).withOpacity(0.10),
+              borderColor: const Color(0xFF1B3769).withOpacity(0.30),
+              child: const Icon(Icons.add_photo_alternate_rounded, size: 17, color: Color(0xFF1B3769)),
+            ),
+          ],
         ],
       ),
-    ],
-  ),
-  actions: [
-    Padding(
-      padding: const EdgeInsets.only(right: 12),
-      child: IconButton(
-        icon: Icon(Icons.download_rounded, color: ThemeManager.blue(context), size: 20),
-        tooltip: 'Download all as ZIP',
-        onPressed: onDownload,
+    );
+  }
+}
+
+/// Reusable 34×34 icon button for the inline header row — mirrors
+/// `_buildCompactIconButton` from SchedulePage.
+class _HeaderIconButton extends StatelessWidget {
+  final Widget child;
+  final Color color;
+  final Color borderColor;
+  final VoidCallback onTap;
+  final String? tooltip;
+
+  const _HeaderIconButton({
+    required this.child,
+    required this.color,
+    required this.borderColor,
+    required this.onTap,
+    this.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final btn = GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: borderColor),
+        ),
+        alignment: Alignment.center,
+        child: child,
       ),
-    ),
-  ],
-);
+    );
+    return tooltip != null ? Tooltip(message: tooltip!, child: btn) : btn;
   }
 }
 
@@ -654,7 +748,7 @@ class _PCToolbar extends StatelessWidget {
             ),
           ),
 
-          // Summary preview (takes all remaining space, pushing buttons to far right)
+          // Summary preview
           if (dailySummary != null && dailySummary!.isNotEmpty) ...[
             const SizedBox(width: 12),
             Expanded(
@@ -685,7 +779,6 @@ class _PCToolbar extends StatelessWidget {
             ),
           ],
 
-          // Loading indicator (if any)
           if (summaryLoading) ...[
             const SizedBox(width: 12),
             SizedBox(
@@ -695,7 +788,6 @@ class _PCToolbar extends StatelessWidget {
             ),
           ],
 
-          // Buttons – always at the far right
           const SizedBox(width: 12),
           _OutlineButton(
             icon: dailySummary != null ? Icons.description_rounded : Icons.description_outlined,
@@ -749,7 +841,6 @@ class _MobileHeaderCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                // Icon
                 Container(
                   padding: const EdgeInsets.all(9),
                   decoration: BoxDecoration(
@@ -779,7 +870,6 @@ class _MobileHeaderCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                // Summary toggle button
                 GestureDetector(
                   onTap: onSummaryTap,
                   child: Container(
@@ -813,7 +903,6 @@ class _MobileHeaderCard extends StatelessWidget {
               ],
             ),
 
-            // Summary preview
             if (dailySummary != null && dailySummary!.isNotEmpty) ...[
               const SizedBox(height: 10),
               Container(
@@ -949,7 +1038,6 @@ class _ImageCard extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               _ARImageWidget(src: image.image),
-              // Gradient overlay with timestamp
               Positioned(
                 bottom: 0,
                 left: 0,
@@ -1046,46 +1134,6 @@ class _EmptyState extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Mobile FABs
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _MobileFABs extends StatelessWidget {
-  final VoidCallback onAddImage;
-  final VoidCallback onAddSummary;
-
-  const _MobileFABs({required this.onAddImage, required this.onAddSummary});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        FloatingActionButton(
-          heroTag: 'ar_summary',
-          onPressed: onAddSummary,
-          backgroundColor: ThemeManager.surface(context),
-          foregroundColor: const Color(0xFF1B3769),
-          elevation: 2,
-          mini: true,
-          child: const Icon(Icons.description_rounded),
-        ),
-        const SizedBox(height: 12),
-        FloatingActionButton.extended(
-          heroTag: 'ar_add',
-          onPressed: onAddImage,
-          backgroundColor: const Color(0xFF1B3769),
-          foregroundColor: Colors.white,
-          elevation: 2,
-          icon: const Icon(Icons.add_photo_alternate_rounded),
-          label: Text('Add Image', style: GoogleFonts.dmSans(fontWeight: FontWeight.w600)),
-        ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Source Picker — Dialog (landscape)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1169,7 +1217,6 @@ class _SourcePickerSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Handle
           Container(
             width: 36,
             height: 4,
@@ -1331,7 +1378,6 @@ class _SummaryDialog extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
               child: Column(
                 children: [
-                  // Text field
                   TextField(
                     controller: controller,
                     maxLines: 6,
@@ -1361,7 +1407,6 @@ class _SummaryDialog extends StatelessWidget {
                       ),
                     ),
                   ),
-                  // Read-only notice
                   if (!canEdit) ...[
                     const SizedBox(height: 12),
                     Container(
@@ -1392,8 +1437,6 @@ class _SummaryDialog extends StatelessWidget {
                 ],
               ),
             ),
-
-            // Actions
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
               child: Row(

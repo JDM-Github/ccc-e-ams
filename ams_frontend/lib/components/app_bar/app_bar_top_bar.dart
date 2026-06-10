@@ -8,7 +8,7 @@ import 'package:ccc_ojt_schedule/components/theme_manager.dart';
 import 'app_bar_widgets.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Desktop Top Bar
+// Desktop Top Bar  (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class AppTopBar extends StatelessWidget {
@@ -50,7 +50,6 @@ class AppTopBar extends StatelessWidget {
     required this.lastName,
     required this.suffixName,
     required this.extensionName,
-
     required this.role,
     required this.course,
     required this.officeName,
@@ -86,7 +85,6 @@ class AppTopBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Page title + date
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
@@ -110,8 +108,6 @@ class AppTopBar extends StatelessWidget {
             ],
           ),
           const Spacer(),
-
-          // SY selector or static badge
           isSupervisorOrAdmin
               ? SYDropdown(
                   dark: isDark,
@@ -125,32 +121,19 @@ class AppTopBar extends StatelessWidget {
                 )
               : _StaticSYBadgeLight(userSY: userSY, isDark: isDark),
           const SizedBox(width: 8),
-
-          // Target hours (non-supervisor)
           if (role != 'supervisor') ...[
             _HoursPill(targetHours: targetHours, isDark: isDark),
             const SizedBox(width: 10),
           ],
-
-          // Advance SY
           if (canAdvanceSY && !isAdvancing) ...[_AdvanceSYPill(onTap: onAdvanceSY), const SizedBox(width: 10)],
-
-          // Office name
           _OfficePill(officeName: officeName, isDark: isDark),
-
           const SizedBox(width: 16),
           Container(width: 1, height: 32, color: isDark ? Colors.white.withOpacity(0.08) : const Color(0xFFE2E8F0)),
           const SizedBox(width: 16),
-
-          // ── Theme toggle ──────────────────────────────────────
           const _ThemeToggleChip(),
           const SizedBox(width: 12),
-
-          // Avatar
           UserAvatar(profileLink: profileLink, firstName: firstName),
           const SizedBox(width: 10),
-
-          // Name + role
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
@@ -194,22 +177,24 @@ class AppTopBar extends StatelessWidget {
     } else {
       base = '$firstName $lastName';
     }
-
     final suffix = suffixName.trim();
-    if (suffix.isNotEmpty) {
-      base = '$base, $suffix';
-    }
-
+    if (suffix.isNotEmpty) base = '$base, $suffix';
     final ext = extensionName?.trim();
-    if (ext != null && ext.isNotEmpty) {
-      base = '$base, $ext';
-    }
+    if (ext != null && ext.isNotEmpty) base = '$base, $ext';
     return base;
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Mobile AppBar
+// Mobile AppBar  — restructured
+//
+// Layout:
+//   leading  │  title col (school label + office row)  │  actions: [theme, logout]
+//
+// The SY selector (supervisor/admin), advance-SY button, and AY badge are
+// moved into a slim sub-bar that sits BELOW the main AppBar via a Column +
+// PreferredSize trick. This keeps actions lean (2 icons only) and surfaces
+// the contextual controls in a dedicated row.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class AppMobileBar extends StatelessWidget implements PreferredSizeWidget {
@@ -218,7 +203,6 @@ class AppMobileBar extends StatelessWidget implements PreferredSizeWidget {
   final bool isSupervisor;
   final bool canAdvanceSY;
 
-  // SY props
   final bool isViewingCurrentSY;
   final String selectedSYLabel;
   final List<int> syIterations;
@@ -249,125 +233,197 @@ class AppMobileBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onLogout,
   });
 
+  // 85 (56) + sub-bar height (36) when the sub-bar is shown
+  bool get _hasSubBar => isSupervisorOrAdmin || canAdvanceSY || !isSupervisor;
+  static const double _subBarHeight = 36.0;
+
   @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+  Size get preferredSize => Size.fromHeight(85 + (_hasSubBar ? _subBarHeight : 0));
 
   @override
   Widget build(BuildContext context) {
-    return AppBar(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      flexibleSpace: Stack(
-        children: [
-          // Always-dark gradient — matches LoginBrandingPanel
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [Color(0xFF080C14), Color(0xFF0F1E3C), Color(0xFF1B3769)],
-              ),
-            ),
-          ),
-          // Grid overlay
-          Positioned.fill(
-            child: CustomPaint(painter: const GridPainter(brightness: Brightness.dark)),
-          ),
-        ],
-      ),
-      leading: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 0, 10),
-        child: Image.asset('assets/icon.png', fit: BoxFit.contain, isAntiAlias: true),
-      ),
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'CITY COLLEGE OF CALAMBA',
-            style: GoogleFonts.dmSans(
-              fontSize: 9,
-              fontWeight: FontWeight.w600,
-              color: Colors.white.withOpacity(0.55),
-              letterSpacing: 0.8,
-            ),
-          ),
-          const SizedBox(height: 1),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: Text(
-                  officeName,
-                  style: GoogleFonts.dmSans(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    color: Colors.white,
-                    letterSpacing: 0.2,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-              ),
-              if (isSupervisorOrAdmin) ...[
-                const SizedBox(width: 8),
-                SYDropdown(
-                  dark: true,
-                  isViewingCurrentSY: isViewingCurrentSY,
-                  selectedSYLabel: selectedSYLabel,
-                  syIterations: syIterations,
-                  currentIteration: currentIteration,
-                  changeableIteration: changeableIteration,
-                  currentSY: currentSY,
-                  onChanged: onSYChanged,
-                ),
-              ],
-            ],
-          ),
-        ],
-      ),
-      actions: [
-        if (!isSupervisor)
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: StaticSYBadge(userSY: userSY),
-          ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // ── Main bar ────────────────────────────────────────────
+        _buildMainBar(context),
 
-        if (canAdvanceSY)
+        // ── Sub-bar (SY / AY / Advance) ─────────────────────────
+        if (_hasSubBar) _buildSubBar(context),
+      ],
+    );
+  }
+
+  Widget _buildMainBar(BuildContext context) {
+    return SizedBox(
+      height: 85,
+      child: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: Stack(
+          children: [
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [Color(0xFF080C14), Color(0xFF0F1E3C), Color(0xFF1B3769)],
+                ),
+              ),
+            ),
+            Positioned.fill(
+              child: CustomPaint(painter: const GridPainter(brightness: Brightness.dark)),
+            ),
+          ],
+        ),
+        leading: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 0, 10),
+          child: Image.asset('assets/icon.png', fit: BoxFit.contain, isAntiAlias: true),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'CITY COLLEGE OF CALAMBA',
+              style: GoogleFonts.dmSans(
+                fontSize: 9,
+                fontWeight: FontWeight.w600,
+                color: Colors.white.withOpacity(0.55),
+                letterSpacing: 0.8,
+              ),
+            ),
+            const SizedBox(height: 1),
+            Text(
+              officeName,
+              style: GoogleFonts.dmSans(
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+                color: Colors.white,
+                letterSpacing: 0.2,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+          ],
+        ),
+        // Only 2 actions: theme toggle + logout
+        actions: [
+          const Padding(padding: EdgeInsets.only(right: 2), child: _ThemeToggleMobileButton()),
           Padding(
-            padding: const EdgeInsets.only(right: 4),
+            padding: const EdgeInsets.only(right: 10),
             child: IconButton(
-              icon: const Icon(Icons.arrow_circle_up_outlined, color: Color(0xFFFBBF24), size: 20),
-              tooltip: 'Advance School Year',
-              onPressed: onAdvanceSY,
+              icon: const Icon(Icons.logout_rounded, color: Colors.white, size: 20),
+              tooltip: 'Logout',
+              onPressed: onLogout,
               style: IconButton.styleFrom(
                 backgroundColor: Colors.white.withOpacity(0.10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
             ),
           ),
-        const SizedBox(width: 5, height: 0),
-        const Padding(padding: EdgeInsets.only(right: 2), child: _ThemeToggleMobileButton()),
-        const SizedBox(width: 5, height: 0),
-        Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: IconButton(
-            icon: const Icon(Icons.logout_rounded, color: Colors.white, size: 20),
-            tooltip: 'Logout',
-            onPressed: onLogout,
-            style: IconButton.styleFrom(
-              backgroundColor: Colors.white.withOpacity(0.10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSubBar(BuildContext context) {
+    // Same gradient as main bar, slightly darker tint at bottom
+    return Container(
+      height: _subBarHeight,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [
+            const Color(0xFF080C14).withOpacity(0.92),
+            const Color(0xFF0F1E3C).withOpacity(0.92),
+            const Color(0xFF1B3769).withOpacity(0.92),
+          ],
         ),
-      ],
+        border: const Border(bottom: BorderSide(color: Color(0x22FFFFFF), width: 1)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: Row(
+          children: [
+            // AY badge for students
+            if (!isSupervisor) ...[StaticSYBadge(userSY: userSY), const SizedBox(width: 8)],
+
+            // SY dropdown for supervisor/admin
+            if (isSupervisorOrAdmin) ...[
+              SYDropdown(
+                dark: true,
+                isViewingCurrentSY: isViewingCurrentSY,
+                selectedSYLabel: selectedSYLabel,
+                syIterations: syIterations,
+                currentIteration: currentIteration,
+                changeableIteration: changeableIteration,
+                currentSY: currentSY,
+                onChanged: onSYChanged,
+              ),
+              const SizedBox(width: 8),
+            ],
+
+            // Advance SY button
+            if (canAdvanceSY) ...[_AdvanceSYSubBarButton(onTap: onAdvanceSY)],
+
+            const Spacer(),
+
+            // Subtle date label on the right
+            Text(
+              DateFormat('MMM d, yyyy').format(DateTime.now()),
+              style: GoogleFonts.dmSans(
+                fontSize: 10,
+                color: Colors.white.withOpacity(0.40),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact "Next AY" button styled for the dark sub-bar
+class _AdvanceSYSubBarButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AdvanceSYSubBarButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFBBF24).withOpacity(0.12),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFFBBF24).withOpacity(0.30)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.arrow_circle_up_outlined, size: 12, color: Color(0xFFFBBF24)),
+            const SizedBox(width: 5),
+            Text(
+              'Next AY',
+              style: GoogleFonts.dmSans(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFFFBBF24).withOpacity(0.90),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Mobile Bottom Navigation Bar
+// Mobile Bottom Navigation Bar  — horizontally scrollable
 // ─────────────────────────────────────────────────────────────────────────────
 
 class AppBottomNav extends StatelessWidget {
@@ -391,10 +447,12 @@ class AppBottomNav extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          // Center content when items fit without scrolling
+          padding: EdgeInsets.symmetric(horizontal: _horizontalPadding(context, items.length), vertical: 6),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            mainAxisSize: MainAxisSize.min,
             children: items
                 .map(
                   (item) => _BottomNavItem(
@@ -408,6 +466,18 @@ class AppBottomNav extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Returns padding so items appear centered when they all fit on screen,
+  /// and collapses to a small edge gap when the user needs to scroll.
+  double _horizontalPadding(BuildContext context, int count) {
+    const itemWidth = 70.0; // approx width per nav item
+    final screenWidth = MediaQuery.of(context).size.width;
+    final totalItems = count * itemWidth;
+    if (totalItems < screenWidth) {
+      return (screenWidth - totalItems) / 2;
+    }
+    return 8.0;
   }
 }
 
@@ -430,7 +500,8 @@ class _BottomNavItem extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        width: 64,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
         decoration: BoxDecoration(
           color: isActive ? activeBg : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
@@ -447,6 +518,9 @@ class _BottomNavItem extends StatelessWidget {
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
                 color: isActive ? activeColor : inactiveColor,
               ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -456,8 +530,7 @@ class _BottomNavItem extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Theme Toggle — Desktop chip (labeled pill, sits in top bar)
-// Mirrors the login page toggle: frosted container + icon + text
+// Theme Toggle — Desktop chip (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ThemeToggleChip extends StatelessWidget {
@@ -507,9 +580,7 @@ class _ThemeToggleChip extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Theme Toggle — Mobile icon button (in AppBar actions)
-// The mobile bar is always dark, so this is styled dark-on-dark,
-// exactly matching the login page's _ThemeToggleButton.
+// Theme Toggle — Mobile icon button (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ThemeToggleMobileButton extends StatelessWidget {
@@ -520,29 +591,20 @@ class _ThemeToggleMobileButton extends StatelessWidget {
     final notifier = context.watch<ThemeModeNotifier>();
     final dark = notifier.value == ThemeMode.dark;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.10),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white.withOpacity(0.15)),
-      ),
-      child: IconButton(
-        icon: Icon(
-          dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-          color: Colors.white.withOpacity(0.85),
-          size: 18,
-        ),
-        onPressed: notifier.toggle,
-        tooltip: dark ? 'Switch to light mode' : 'Switch to dark mode',
-        padding: const EdgeInsets.all(8),
-        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+    return IconButton(
+      icon: Icon(dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined, color: Colors.white, size: 20),
+      onPressed: notifier.toggle,
+      tooltip: dark ? 'Switch to light mode' : 'Switch to dark mode',
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.white.withOpacity(0.10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Private pill widgets (only used inside AppTopBar)
+// Pill widgets (desktop top bar)  — unchanged
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _StaticSYBadgeLight extends StatelessWidget {
@@ -625,7 +687,7 @@ class _AdvanceSYPill extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.arrow_forward_rounded, size: 14, color: const Color(0xFFFBBF24)),
+            const Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFFFBBF24)),
             const SizedBox(width: 8),
             Text(
               'Next AY',

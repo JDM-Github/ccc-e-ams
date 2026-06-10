@@ -16,6 +16,18 @@ const Office = sequelize.define(
             type: DataTypes.STRING,
             allowNull: false
         },
+        office_acronym: {
+            type: DataTypes.STRING,
+            defaultValue: "",
+        },
+        office_vision: {
+            type: DataTypes.STRING,
+            defaultValue: "",
+        },
+        office_mission: {
+            type: DataTypes.STRING,
+            defaultValue: "",
+        },
         office_latitude: {
             type: DataTypes.DECIMAL,
             allowNull: false

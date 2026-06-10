@@ -5,3 +5,5 @@ frontend/
 node_modules/
 seeders/
 seeders1/
+seeders2/
+backups/

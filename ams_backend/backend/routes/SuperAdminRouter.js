@@ -818,67 +818,6 @@ class SuperAdminRouter {
 				return res.status(500).json({ success: false, message: "Failed to restore member." });
 			}
 		});
-
-
-		// ── Permanent Delete Member ─────────────────────────────────────────────────
-		/**
-		 * POST /super-admin/permanent-delete-member
-		 *
-		 * Body: { ccc_id }
-		 *
-		 * Permanently deletes a user and all associated records:
-		 * - SupervisorUser record (if any)
-		 * - Logs
-		 * - Schedules, and their related ActivityRecords + Summaries
-		 * - The User itself
-		 *
-		 * This operation is irreversible.
-		 */
-		this.router.post("/permanent-delete-member", async (req, res) => {
-			const { ccc_id } = req.body;
-			if (!ccc_id) {
-				return res.status(400).json({ success: false, message: "ccc_id is required." });
-			}
-
-			const transaction = await sequelize.transaction();
-			try {
-				const user = await User.findOne({ where: { ccc_id }, transaction });
-				if (!user) {
-					await transaction.rollback();
-					return res.status(404).json({ success: false, message: "User not found." });
-				}
-
-				const name = `${user.first_name} ${user.last_name}`;
-
-				await SupervisorUser.destroy({ where: { ccc_id }, transaction });
-				await Log.destroy({ where: { user_ccc_id: ccc_id }, transaction });
-
-				const schedules = await Schedule.findAll({ where: { ccc_id }, transaction });
-				const scheduleRecordDates = schedules.map(s => buildRecordDate(s.date, s.ccc_id));
-				if (scheduleRecordDates.length > 0) {
-					await ActivityRecord.destroy({ where: { schedule_record_date: scheduleRecordDates }, transaction });
-					await Summary.destroy({ where: { schedule_record_date: scheduleRecordDates }, transaction });
-				}
-				await Schedule.destroy({ where: { ccc_id }, transaction });
-
-				await user.destroy({ transaction });
-				await transaction.commit();
-
-				await createSuperAdminLog(
-					"delete",
-					`Permanently deleted member ${ccc_id} (${name}).`
-				);
-
-				return res.json({
-					success: true,
-					message: `${name} has been permanently deleted.`
-				});
-			} catch (err) {
-				await transaction.rollback();
-				console.error("[SuperAdminRouter] POST /permanent-delete-member →", err);
-				return res.status(500).json({ success: false, message: "Failed to permanently delete member." });
-			}
-		});
 	}
 
 	deleteRouter() {

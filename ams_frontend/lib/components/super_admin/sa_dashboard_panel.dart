@@ -36,10 +36,16 @@ class _SADashboardPanelState extends State<SADashboardPanel> with AutomaticKeepA
   bool _loading = true;
   String? _error;
 
+  // ── College info state ────────────────────────────────────────────────────
+  String _vision = '';
+  String _mission = '';
+  bool _collegeInfoLoading = false;
+
   @override
   void initState() {
     super.initState();
     _load();
+    _fetchCollegeInfo();
   }
 
   Future<void> _load() async {
@@ -56,6 +62,47 @@ class _SADashboardPanelState extends State<SADashboardPanel> with AutomaticKeepA
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _fetchCollegeInfo() async {
+    if (!mounted) return;
+    setState(() => _collegeInfoLoading = true);
+    try {
+      final r = await RequestHandler().handleRequest('user/college-info', method: 'GET');
+      if (mounted && r['success'] == true && r['info'] != null) {
+        setState(() {
+          _vision = r['info']['vision'] ?? '';
+          _mission = r['info']['mission'] ?? '';
+        });
+      }
+    } catch (_) {
+      // keep existing values
+    } finally {
+      if (mounted) setState(() => _collegeInfoLoading = false);
+    }
+  }
+
+  Future<void> _updateCollegeInfo(String vision, String mission) async {
+    final r = await RequestHandler().handleRequest(
+      'user/college-info',
+      method: 'PUT',
+      body: {'vision': vision, 'mission': mission},
+    );
+    if (r['success'] == true && mounted) {
+      setState(() {
+        _vision = vision;
+        _mission = mission;
+      });
+    } else {
+      throw Exception(r['message'] ?? 'Failed to update');
+    }
+  }
+
+  void _openEditDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => _CollegeInfoDialog(initialVision: _vision, initialMission: _mission, onSave: _updateCollegeInfo),
+    );
   }
 
   static int _toInt(dynamic v) {
@@ -80,7 +127,9 @@ class _SADashboardPanelState extends State<SADashboardPanel> with AutomaticKeepA
     final isLandscape = MediaQuery.of(context).size.width > MediaQuery.of(context).size.height;
 
     return RefreshIndicator(
-      onRefresh: _load,
+      onRefresh: () async {
+        await Future.wait([_load(), _fetchCollegeInfo()]);
+      },
       color: Colors.white,
       backgroundColor: _brand,
       child: SingleChildScrollView(
@@ -107,6 +156,10 @@ class _SADashboardPanelState extends State<SADashboardPanel> with AutomaticKeepA
                       completedEntries: _toInt(ojt['completed_schedule_entries']),
                     ),
                   ),
+                  const SizedBox(height: 16),
+
+                  // ── College info ───────────────────────────────────
+                  SAStaggerItem(index: 6, child: _buildCollegeInfoCard()),
                   const SizedBox(height: 20),
                 ],
               ),
@@ -167,7 +220,7 @@ class _SADashboardPanelState extends State<SADashboardPanel> with AutomaticKeepA
     );
   }
 
-  // ── Hero — matches AboutPage hero exactly ─────────────────────────────────
+  // ── Hero ──────────────────────────────────────────────────────────────────
 
   Widget _buildHero() {
     final now = DateTime.now();
@@ -184,7 +237,6 @@ class _SADashboardPanelState extends State<SADashboardPanel> with AutomaticKeepA
       ),
       child: Row(
         children: [
-          // Logo box — same style as AboutPage
           Container(
             width: 52,
             height: 52,
@@ -233,7 +285,9 @@ class _SADashboardPanelState extends State<SADashboardPanel> with AutomaticKeepA
             ),
           ),
           GestureDetector(
-            onTap: _load,
+            onTap: () async {
+              await Future.wait([_load(), _fetchCollegeInfo()]);
+            },
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
@@ -364,7 +418,7 @@ class _SADashboardPanelState extends State<SADashboardPanel> with AutomaticKeepA
 
   static String _fmtHours(int h) => h >= 1000 ? '${(h / 1000).toStringAsFixed(1)}k' : '$h';
 
-  // ── Summary strip — matches AboutPage card style ──────────────────────────
+  // ── Summary strip ─────────────────────────────────────────────────────────
 
   Widget _buildSummaryStrip({required int totalStudents, required int totalHours, required int completedEntries}) {
     final avg = totalStudents > 0 ? (totalHours / totalStudents).round() : 0;
@@ -425,6 +479,369 @@ class _SADashboardPanelState extends State<SADashboardPanel> with AutomaticKeepA
 
   Widget _summaryDivider() =>
       Container(width: 1, height: 30, color: _divider, margin: const EdgeInsets.symmetric(horizontal: 6));
+
+  // ── College info card ─────────────────────────────────────────────────────
+
+  Widget _buildCollegeInfoCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF111827),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: _accentPurple.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.account_balance_rounded, size: 14, color: _accentPurple),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'College Information',
+                  style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: _textPrimary),
+                ),
+              ),
+              // Reload
+              GestureDetector(
+                onTap: _collegeInfoLoading ? null : _fetchCollegeInfo,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.04),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: _border),
+                  ),
+                  child: _collegeInfoLoading
+                      ? SizedBox(
+                          width: 11,
+                          height: 11,
+                          child: CircularProgressIndicator(strokeWidth: 1.5, color: _textMuted),
+                        )
+                      : Icon(Icons.refresh_rounded, size: 13, color: _textMuted),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Edit
+              GestureDetector(
+                onTap: _openEditDialog,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _accentPurple.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: _accentPurple.withOpacity(0.20)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.edit_rounded, size: 11, color: _accentPurple),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Edit',
+                        style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w600, color: _accentPurple),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(height: 1, color: _divider),
+          const SizedBox(height: 14),
+
+          // Vision
+          _infoRow(
+            icon: Icons.visibility_outlined,
+            color: const Color(0xFFA78BFA),
+            label: 'VISION',
+            text: _vision.isEmpty ? '—' : _vision,
+          ),
+          const SizedBox(height: 12),
+
+          // Mission
+          _infoRow(
+            icon: Icons.flag_outlined,
+            color: const Color(0xFFF472B6),
+            label: 'MISSION',
+            text: _mission.isEmpty ? '—' : _mission,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow({required IconData icon, required Color color, required String label, required String text}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(6)),
+          child: Icon(icon, size: 12, color: color),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.dmSans(
+                  fontSize: 8,
+                  fontWeight: FontWeight.w700,
+                  color: _textFaint,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(text, style: GoogleFonts.dmSans(fontSize: 12, color: _textSecondary, height: 1.55)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Edit dialog ───────────────────────────────────────────────────────────────
+
+class _CollegeInfoDialog extends StatefulWidget {
+  final String initialVision;
+  final String initialMission;
+  final Future<void> Function(String vision, String mission) onSave;
+
+  const _CollegeInfoDialog({required this.initialVision, required this.initialMission, required this.onSave});
+
+  @override
+  State<_CollegeInfoDialog> createState() => _CollegeInfoDialogState();
+}
+
+class _CollegeInfoDialogState extends State<_CollegeInfoDialog> {
+  late final TextEditingController _visionCtrl;
+  late final TextEditingController _missionCtrl;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _visionCtrl = TextEditingController(text: widget.initialVision);
+    _missionCtrl = TextEditingController(text: widget.initialMission);
+  }
+
+  @override
+  void dispose() {
+    _visionCtrl.dispose();
+    _missionCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final vision = _visionCtrl.text.trim();
+    final mission = _missionCtrl.text.trim();
+    if (vision.isEmpty || mission.isEmpty) {
+      setState(() => _error = 'Vision and mission cannot be empty.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await widget.onSave(vision, mission);
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: const Color(0xFF111827),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Dialog header
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: _accentPurple.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.edit_rounded, size: 14, color: _accentPurple),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Edit College Information',
+                      style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700, color: _textPrimary),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _saving ? null : () => Navigator.pop(context),
+                    child: Icon(Icons.close_rounded, size: 16, color: _textMuted),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Container(height: 1, color: _divider),
+              const SizedBox(height: 16),
+
+              // Vision field
+              _fieldLabel(Icons.visibility_outlined, const Color(0xFFA78BFA), 'VISION'),
+              const SizedBox(height: 6),
+              _textField(_visionCtrl, 'Enter vision statement…', 4),
+              const SizedBox(height: 14),
+
+              // Mission field
+              _fieldLabel(Icons.flag_outlined, const Color(0xFFF472B6), 'MISSION'),
+              const SizedBox(height: 6),
+              _textField(_missionCtrl, 'Enter mission statement…', 4),
+
+              // Error
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: _accentRed.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: _accentRed.withOpacity(0.20)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline_rounded, size: 12, color: _accentRed),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(_error!, style: GoogleFonts.dmSans(fontSize: 11, color: _accentRed)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 18),
+
+              // Actions
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: _saving ? null : () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.04),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: _border),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          'Cancel',
+                          style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w600, color: _textSecondary),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: _saving ? null : _save,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: _accentPurple.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: _accentPurple.withOpacity(0.25)),
+                        ),
+                        alignment: Alignment.center,
+                        child: _saving
+                            ? SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(strokeWidth: 1.5, color: _accentPurple),
+                              )
+                            : Text(
+                                'Save',
+                                style: GoogleFonts.dmSans(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: _accentPurple,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _fieldLabel(IconData icon, Color color, String label) {
+    return Row(
+      children: [
+        Icon(icon, size: 11, color: color),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: GoogleFonts.dmSans(fontSize: 9, fontWeight: FontWeight.w700, color: _textFaint, letterSpacing: 0.8),
+        ),
+      ],
+    );
+  }
+
+  Widget _textField(TextEditingController ctrl, String hint, int maxLines) {
+    return TextField(
+      controller: ctrl,
+      maxLines: maxLines,
+      style: GoogleFonts.dmSans(fontSize: 12, color: _textPrimary),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: GoogleFonts.dmSans(fontSize: 12, color: _textFaint),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.04),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: _border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: _border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: _accentPurple.withOpacity(0.50)),
+        ),
+      ),
+    );
+  }
 }
 
 // ── Stat data model ───────────────────────────────────────────────────────────
@@ -447,7 +864,7 @@ class _StatData {
   });
 }
 
-// ── Stat card — matches AboutPage _featureRow card shell ─────────────────────
+// ── Stat card ─────────────────────────────────────────────────────────────────
 
 class _StatCard extends StatelessWidget {
   final _StatData stat;

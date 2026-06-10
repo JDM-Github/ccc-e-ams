@@ -327,12 +327,12 @@ class _SchedulePageState extends State<SchedulePage> {
 
         return Scaffold(
           backgroundColor: ThemeManager.scaffold(context),
-          floatingActionButton: (isLandscape || !isActive) ? null : _buildFAB(scheduleStore),
+          // FAB removed — actions live in the mobile filter bar
           body: Column(
             children: [
               isLandscape
                   ? _buildPcTopBar(context, scheduleStore, displayRecords, isActive, isDark)
-                  : _buildMobileFilterBar(context, scheduleStore, isDark),
+                  : _buildMobileFilterBar(context, scheduleStore, isActive, isDark),
               _buildOfflineBanner(context, scheduleStore, isDark),
               if (!isLandscape) _buildRecordCountRow(context, displayRecords, isDark),
               Expanded(child: _buildRecordList(context, scheduleStore, displayRecords, isFirstLoad, isDark)),
@@ -343,7 +343,7 @@ class _SchedulePageState extends State<SchedulePage> {
     );
   }
 
-  // ── PC Top Bar ─────────────────────────────────────────────────────────────
+  // ── PC Top Bar (unchanged) ─────────────────────────────────────────────────
 
   Widget _buildPcTopBar(
     BuildContext context,
@@ -363,7 +363,6 @@ class _SchedulePageState extends State<SchedulePage> {
       ),
       child: Row(
         children: [
-          // Search
           SizedBox(
             width: 220,
             height: 34,
@@ -388,10 +387,7 @@ class _SchedulePageState extends State<SchedulePage> {
             ),
           ),
           const SizedBox(width: 12),
-
-          // Status filters
           _pcFilterChip(context, 'All', selectedStatus == null, () => setState(() => selectedStatus = null), isDark),
-          
           const SizedBox(width: 4),
           _pcFilterChip(
             context,
@@ -408,22 +404,16 @@ class _SchedulePageState extends State<SchedulePage> {
             () => setState(() => selectedStatus = 'Done'),
             isDark,
           ),
-
           Container(
             width: 1,
             height: 20,
             color: ThemeManager.dividerColor(context),
             margin: const EdgeInsets.symmetric(horizontal: 10),
           ),
-
           _pcSortDropdown(context, isDark),
           const Spacer(),
-
-          // In/Out Office badge
           _buildLocationBadge(context, inOffice, isDark),
           const SizedBox(width: 10),
-
-          // Refresh
           SizedBox(
             height: 34,
             width: 34,
@@ -443,8 +433,6 @@ class _SchedulePageState extends State<SchedulePage> {
                   : Icon(Icons.refresh_rounded, size: 16, color: ThemeManager.secondary(context)),
             ),
           ),
-
-          // Add record
           if (isActive) ...[
             const SizedBox(width: 8),
             Consumer<ScheduleStore>(
@@ -470,10 +458,7 @@ class _SchedulePageState extends State<SchedulePage> {
               },
             ),
           ],
-
           const SizedBox(width: 8),
-
-          // Export
           SizedBox(
             height: 34,
             child: ElevatedButton.icon(
@@ -519,7 +504,7 @@ class _SchedulePageState extends State<SchedulePage> {
           ),
           const SizedBox(width: 6),
           Text(
-            inOffice ? 'In Office' : 'Outside Office',
+            inOffice ? 'In Office' : 'Outside',
             style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w600, color: color),
           ),
         ],
@@ -581,81 +566,236 @@ class _SchedulePageState extends State<SchedulePage> {
   }
 
   // ── Mobile Filter Bar ──────────────────────────────────────────────────────
+  //
+  // Layout (2 rows):
+  //
+  //  Row 1: [search]  [location dot]  [refresh]  [export]  [+ Add Record]
+  //  Row 2: status chips | sort chips  (single scrollable row)
+  //
+  // The location badge is condensed to a dot + short label so it fits inline.
+  // Add Record is disabled (greyed) when _canAddRecord returns false — same
+  // logic as before, just moved here from the FAB.
 
-  Widget _buildMobileFilterBar(BuildContext context, ScheduleStore scheduleStore, bool isDark) {
+  Widget _buildMobileFilterBar(BuildContext context, ScheduleStore scheduleStore, bool isActive, bool isDark) {
     final isFirstLoad = scheduleStore.schedules.isEmpty && scheduleStore.isLoading;
+    final inOffice = isInOffice();
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       decoration: BoxDecoration(
         color: ThemeManager.surfaceElevated(context),
         boxShadow: isDark ? null : [const BoxShadow(color: Color(0x0A000000), blurRadius: 4, offset: Offset(0, 2))],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
+          // ── Row 1: search + action buttons ──────────────────
           Row(
             children: [
+              // Search — takes remaining space
               Expanded(child: _buildSearchField(context, isDark)),
-              const SizedBox(width: 8),
-              _buildRefreshButton(context, scheduleStore, isFirstLoad, isDark),
+              const SizedBox(width: 6),
+
+              // Location dot badge (compact)
+              _buildMobileLocationDot(context, inOffice, isDark),
+              const SizedBox(width: 6),
+
+              // Refresh
+              _buildCompactIconButton(
+                context,
+                tooltip: 'Refresh',
+                color: ThemeManager.inputFillColor(context),
+                borderColor: ThemeManager.border(context),
+                onTap: _refreshSchedules,
+                child: scheduleStore.isLoading && !isFirstLoad
+                    ? SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(ThemeManager.blue(context)),
+                        ),
+                      )
+                    : Icon(Icons.refresh_rounded, size: 17, color: ThemeManager.secondary(context)),
+              ),
+              const SizedBox(width: 6),
+
+              // Export
+              _buildCompactIconButton(
+                context,
+                tooltip: 'Export to Excel',
+                color: const Color(0xFF16A34A).withOpacity(0.10),
+                borderColor: const Color(0xFF16A34A).withOpacity(0.30),
+                onTap: () => showDialog(
+                  context: context,
+                  builder: (_) => ExportExcelDialog(cccId: cccId),
+                ),
+                child: const Icon(Icons.download_rounded, size: 17, color: Color(0xFF16A34A)),
+              ),
+
+              // Add Record — only shown for active SY students
+              if (isActive) ...[
+                const SizedBox(width: 6),
+                Consumer<ScheduleStore>(
+                  builder: (context, store, _) {
+                    final canAdd = _canAddRecord(store.schedules);
+                    return _buildCompactIconButton(
+                      context,
+                      tooltip: canAdd ? 'Add Record' : 'Cannot add record now',
+                      color: canAdd ? const Color(0xFF1B3769).withOpacity(0.10) : ThemeManager.surfaceTint(context),
+                      borderColor: canAdd ? const Color(0xFF1B3769).withOpacity(0.30) : ThemeManager.border(context),
+                      onTap: canAdd ? _addNewRecord : null,
+                      child: Icon(
+                        Icons.add_rounded,
+                        size: 17,
+                        color: canAdd ? const Color(0xFF1B3769) : ThemeManager.muted(context),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ],
           ),
+
+          const SizedBox(height: 8),
+
+          // ── Row 2: all chips in one scrollable row ────────────
+          SizedBox(
+            height: 26,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                // Status chips
+                ...statusOptions.map((status) {
+                  final isSelected = (status == 'All' && selectedStatus == null) || status == selectedStatus;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: _mobileChip(
+                      context,
+                      status,
+                      isSelected,
+                      () => setState(() => selectedStatus = status == 'All' ? null : status),
+                    ),
+                  );
+                }),
+
+                // Divider between groups
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: VerticalDivider(width: 1, thickness: 1, color: ThemeManager.dividerColor(context)),
+                ),
+
+                // Sort chips
+                ...sortOptions.map((sort) {
+                  final isSelected = (selectedSort ?? 'Newest') == sort;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: _mobileChip(context, sort, isSelected, () => setState(() => selectedSort = sort)),
+                  );
+                }),
+              ],
+            ),
+          ),
+
+          // Last synced
           if (scheduleStore.lastFetched != null)
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Align(
                 alignment: Alignment.centerRight,
                 child: Text(
-                  'Last synced: ${_formatLastFetched(scheduleStore.lastFetched!)}',
+                  'Synced ${_formatLastFetched(scheduleStore.lastFetched!)}',
                   style: GoogleFonts.dmSans(fontSize: 10, color: ThemeManager.muted(context)),
                 ),
               ),
             ),
-          const SizedBox(height: 8),
-          _buildChipFilters(context, isDark),
         ],
       ),
     );
   }
 
-  Widget _buildFAB(ScheduleStore scheduleStore) {
-    return Consumer<ScheduleStore>(
-      builder: (context, store, _) {
-        final canAdd = _canAddRecord(store.schedules);
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            FloatingActionButton(
-              heroTag: 'export_fab',
-              onPressed: () => showDialog(
-                context: context,
-                builder: (_) => ExportExcelDialog(cccId: cccId),
-              ),
-              backgroundColor: const Color(0xFF16A34A),
-              foregroundColor: Colors.white,
-              mini: true,
-              elevation: 2,
-              child: const Icon(Icons.download_rounded, size: 20),
-            ),
-            const SizedBox(height: 10),
-            FloatingActionButton.extended(
-              heroTag: 'add_record_fab',
-              onPressed: canAdd ? _addNewRecord : null,
-              backgroundColor: canAdd ? const Color(0xFF1B3769) : Colors.grey[400],
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.add_rounded),
-              label: Text('Add Record', style: GoogleFonts.dmSans(fontWeight: FontWeight.w600)),
-              elevation: 2,
-            ),
-          ],
-        );
-      },
+  /// Tiny dot-only location indicator for the mobile action row.
+  /// Shows a pulsing green dot when in office, grey dot when outside.
+  Widget _buildMobileLocationDot(BuildContext context, bool inOffice, bool isDark) {
+    final color = inOffice ? const Color(0xFF10B981) : ThemeManager.muted(context);
+    final bg = inOffice
+        ? const Color(0xFF10B981).withOpacity(isDark ? 0.15 : 0.10)
+        : ThemeManager.inputFillColor(context);
+    final border = inOffice ? const Color(0xFF10B981).withOpacity(0.30) : ThemeManager.border(context);
+
+    return Tooltip(
+      message: inOffice ? 'In Office' : 'Outside Office',
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: border),
+        ),
+        alignment: Alignment.center,
+        child: Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+        ),
+      ),
+    );
+  }
+
+  /// Compact 34×34 icon button reused across the mobile action row.
+  Widget _buildCompactIconButton(
+    BuildContext context, {
+    required Widget child,
+    required Color color,
+    required Color borderColor,
+    required VoidCallback? onTap,
+    String? tooltip,
+  }) {
+    final btn = GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: borderColor),
+        ),
+        alignment: Alignment.center,
+        child: child,
+      ),
+    );
+    return tooltip != null ? Tooltip(message: tooltip, child: btn) : btn;
+  }
+
+  Widget _mobileChip(BuildContext context, String label, bool isSelected, VoidCallback onTap, {Color? color}) {
+    final activeColor = color ?? const Color(0xFF1B3769);
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? activeColor : ThemeManager.inputFillColor(context),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: isSelected ? activeColor : ThemeManager.border(context)),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.dmSans(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: isSelected ? Colors.white : ThemeManager.secondary(context),
+          ),
+        ),
+      ),
     );
   }
 
   Widget _buildSearchField(BuildContext context, bool isDark) {
     return Container(
-      height: 36,
+      height: 34,
       decoration: BoxDecoration(
         color: ThemeManager.inputFillColor(context),
         borderRadius: BorderRadius.circular(8),
@@ -664,106 +804,14 @@ class _SchedulePageState extends State<SchedulePage> {
       child: TextField(
         style: GoogleFonts.dmSans(fontSize: 13, color: ThemeManager.primary(context)),
         decoration: InputDecoration(
-          prefixIcon: Icon(Icons.search_rounded, color: ThemeManager.muted(context), size: 18),
-          hintText: 'Search by date',
+          prefixIcon: Icon(Icons.search_rounded, color: ThemeManager.muted(context), size: 17),
+          hintText: 'Search by date…',
           hintStyle: GoogleFonts.dmSans(color: ThemeManager.hint(context), fontSize: 13),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           isDense: true,
         ),
         onChanged: (val) => setState(() => searchQuery = val),
-      ),
-    );
-  }
-
-  Widget _buildRefreshButton(BuildContext context, ScheduleStore scheduleStore, bool isFirstLoad, bool isDark) {
-    return Container(
-      height: 36,
-      width: 36,
-      decoration: BoxDecoration(color: const Color(0xFF1B3769), borderRadius: BorderRadius.circular(8)),
-      child: scheduleStore.isLoading && !isFirstLoad
-          ? const Padding(
-              padding: EdgeInsets.all(10),
-              child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
-            )
-          : IconButton(
-              icon: const Icon(Icons.refresh_rounded, size: 18),
-              color: Colors.white,
-              padding: EdgeInsets.zero,
-              onPressed: _refreshSchedules,
-            ),
-    );
-  }
-
-  Widget _buildChipFilters(BuildContext context, bool isDark) {
-    final activeColor = isDark ? const Color(0xFF1B3769) : const Color(0xFF1B3769);
-
-    return SizedBox(
-      height: 28,
-      child: Row(
-        children: [
-          Icon(Icons.filter_list_rounded, color: ThemeManager.muted(context), size: 16),
-          const SizedBox(width: 6),
-          Expanded(
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                ...statusOptions.map((status) {
-                  final isSelected = (status == 'All' && selectedStatus == null) || status == selectedStatus;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: FilterChip(
-                      label: Text(status),
-                      selected: isSelected,
-                      onSelected: (_) => setState(() => selectedStatus = status == 'All' ? null : status),
-                      backgroundColor: ThemeManager.inputFillColor(context),
-                      selectedColor: activeColor,
-                      checkmarkColor: Colors.white,
-                      labelStyle: GoogleFonts.dmSans(
-                        color: isSelected ? Colors.white : ThemeManager.secondary(context),
-                        fontSize: 11,
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                      ),
-                      side: BorderSide(color: isSelected ? activeColor : ThemeManager.border(context)),
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
-                    ),
-                  );
-                }),
-                Container(
-                  width: 1,
-                  height: 20,
-                  color: ThemeManager.dividerColor(context),
-                  margin: const EdgeInsets.symmetric(horizontal: 6),
-                ),
-                ...sortOptions.map((sort) {
-                  final isSelected = (selectedSort ?? 'Newest') == sort;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: FilterChip(
-                      label: Text(sort),
-                      selected: isSelected,
-                      onSelected: (_) => setState(() => selectedSort = sort),
-                      backgroundColor: ThemeManager.inputFillColor(context),
-                      checkmarkColor: ThemeManager.inputFillColor(context),
-                      selectedColor: activeColor,
-                      labelStyle: GoogleFonts.dmSans(
-                        color: isSelected ? Colors.white : ThemeManager.secondary(context),
-                        fontSize: 11,
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                      ),
-                      side: BorderSide(color: isSelected ? activeColor : ThemeManager.border(context)),
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
-                    ),
-                  );
-                }),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -858,7 +906,7 @@ class _SchedulePageState extends State<SchedulePage> {
       color: Colors.white,
       backgroundColor: const Color(0xFF1B3769),
       child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 80),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
         itemCount: displayRecords.length,
         separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemBuilder: (context, index) {
