@@ -1,11 +1,9 @@
 // Author: JDM
 // Created on: 2026-03-15
-
 require("dotenv").config();
 const { sequelize } = require("./models/Models.js");
 const fs = require("fs");
 const path = require("path");
-
 const BACKUP_DIR = path.join(__dirname, "backups");
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
